@@ -329,6 +329,31 @@ class Logger {
 
   void RegExpCompileEvent(Handle<JSRegExp> regexp, bool in_cache);
 
+  // ==== Events logged by --trace-*-internals ===
+  #define EVENTS_LIST(V)                                  \
+	V(CreateObject,         create_object)                \
+	V(CreateFunction,       create_function)              \
+	V(ChangeType,           change_type)                  \
+	V(ExpandArray,          expand_array)                 \
+	V(MakeHole,             make_hole)                    \
+	V(ToSlowMode,           to_slow)                      \
+	V(ArrayOpsStoreChange,  array_ops_store_change)       \
+	V(ArrayOpsPure,         array_ops_pure)               \
+	V(GenFullCode,			gen_full_code)               \
+	V(GenOptCode,           gen_opt_code)                 \
+	V(GenOsrCode,           gen_osr_code)
+
+  enum InternalEvent {
+#define GetEventName(name, handler) name,
+  EVENTS_LIST(GetEventName)
+  events_count
+#undef GetEventname
+  };
+
+  // Trace function actions
+  void EmitFunctionEvent(InternalEvent event, JSFunction* func,
+				Code* code, SharedFunctionInfo* shared);
+
   // Log an event reported from generated code
   void LogRuntime(Vector<const char> format, JSArray* args);
 

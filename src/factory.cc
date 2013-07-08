@@ -630,6 +630,16 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
       MapForNewFunction(isolate(), function_info),
       pretenure);
 
+  if ( FLAG_trace_function_internals ) {
+	LOG(Isolate::Current(),
+		EmitFunctionEvent(
+		Logger::InternalEvent::CreateFunction,
+		*result,
+		NULL,
+		*function_info)
+	);
+  }
+
   if (function_info->ic_age() != isolate()->heap()->global_ic_age()) {
     function_info->ResetForNewContext(isolate()->heap()->global_ic_age());
   }

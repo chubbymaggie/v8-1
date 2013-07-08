@@ -742,6 +742,9 @@ DEFINE_bool(log_timer_events, false,
 DEFINE_implication(log_timer_events, log_internal_timer_events)
 DEFINE_implication(log_internal_timer_events, prof)
 
+DEFINE_bool(trace_object_internals, false, "trace internals actions applied to objects")
+DEFINE_bool(trace_function_internals, false, "trace internals actions applied to functions")
+
 //
 // Disassembler only flags
 //

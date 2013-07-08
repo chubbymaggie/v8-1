@@ -10,10 +10,10 @@
   V(ChangeType,           change_type)			\
   V(ExpandArray,          expand_array)			\
   V(MakeHole,             make_hole)			\
-  V(ToSlowMode,           to_slow)			\
+  V(ToSlowMode,           to_slow_mode)			\
   V(ArrayOpsStoreChange,  array_ops_store_change)	\
   V(ArrayOpsPure,         array_ops_pure)		\
-  V(GenUnoptCode,         gen_unopt_code)		\
+  V(GenFullCode,          gen_full_code)		\
   V(GenOptCode,           gen_opt_code)			\
   V(GenOsrCode,           gen_osr_code)			
 

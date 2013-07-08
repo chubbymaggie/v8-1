@@ -648,6 +648,53 @@ void Logger::CodeDeoptEvent(Code* code) {
 }
 
 
+void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
+				Code* code, SharedFunctionInfo* shared) {
+  if (!log_->IsEnabled()) return;
+  LogMessageBuilder msg(this);
+
+  Handle<Script> script(Script::cast(shared->script()));
+  int line_num = GetScriptLineNumber( script, 
+		  							shared->start_position()) + 1;
+  int code_address = 0;
+  if ( code != NULL ) code_address = (int)code->address();
+
+  //PrintF("Event = %d\n", event);
+  msg.Append("%d %p %p %d", 
+	  event,
+	  shared->address(),
+	  func->address(),
+	  line_num);
+
+  // Followed are handlers for different event types
+  switch(event) {
+  case InternalEvent::CreateFunction:
+	{
+	  String* debug_name = shared->DebugName();
+	  const char* name = NULL;
+	  if ( debug_name->length() == 0 )
+		name = "Anonymous Closure";
+	  else
+		name = *(debug_name->ToCString());
+	  
+	  msg.Append("%d %s", code_address, name );
+	}
+	break;
+
+  case InternalEvent::GenOptCode:
+  case InternalEvent::GenFullCode:
+  case InternalEvent::GenOsrCode:
+	msg.Append("%p", code_address );
+	break;
+
+  default:
+	break;
+  }
+
+  msg.Append("\n");
+  msg.WriteToLogFile();
+}
+
 void Logger::TimerEvent(StartEnd se, const char* name) {
   if (!log_->IsEnabled()) return;
   ASSERT(FLAG_log_internal_timer_events);

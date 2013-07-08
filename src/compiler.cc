@@ -940,7 +940,6 @@ bool Compiler::CompileLazy(CompilationInfo* info) {
       }
     } else {
       InstallCodeCommon(info);
-
       if (info->IsOptimizing()) {
         Handle<Code> code = info->code();
         ASSERT(shared->scope_info() != ScopeInfo::Empty(isolate));

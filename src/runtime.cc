@@ -8052,6 +8052,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyCompile) {
 
   // All done. Return the compiled code.
   ASSERT(function->is_compiled());
+  if ( FLAG_trace_function_internals ) {
+	LOG(Isolate::Current(),
+	  EmitFunctionEvent(
+	  Logger::InternalEvent::GenFullCode,
+	  *function,
+	  function->code(),
+	  function->shared())
+	);
+  }
   return function->code();
 }
 
@@ -8093,6 +8102,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
   if (JSFunction::CompileOptimized(function,
                                    BailoutId::None(),
                                    CLEAR_EXCEPTION)) {
+	if ( FLAG_trace_function_internals ) {
+	  LOG(Isolate::Current(),
+		EmitFunctionEvent(
+		Logger::InternalEvent::GenOptCode,
+		*function,
+		function->code(),
+		function->shared())
+	  );
+	}
     return function->code();
   }
   if (FLAG_trace_opt) {
@@ -8465,6 +8483,16 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
   // frame to an optimized one.
   if (succeeded) {
     ASSERT(function->code()->kind() == Code::OPTIMIZED_FUNCTION);
+	if ( FLAG_trace_function_internals ) {
+	  LOG(Isolate::Current(),
+		  EmitFunctionEvent(
+			Logger::InternalEvent::GenOsrCode,
+			*function,
+			function->code(),
+			function->shared()
+		  )
+	  );
+	}
     return Smi::FromInt(ast_id.ToInt());
   } else {
     if (function->IsMarkedForLazyRecompilation()) {
@@ -9215,11 +9243,58 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_DebugPrint) {
 #else
   // ShortPrint is available in release mode. Print is not.
   args[0]->ShortPrint();
+  if ( args[0]->IsJSFunction() ) {
+	  // print code info
+	  JSFunction* js_function = JSFunction::cast(args[0]);
+	  Code* js_code = js_function->code();
+	  
+	  PrintF( " {" );
+	  js_code->ShortPrint();
+	  PrintF( ", Optimized = %s}\n", js_function->IsOptimized() ? "Yes" : "No" );
+  }
 #endif
   PrintF("\n");
   Flush();
 
   return args[0];  // return TOS
+}
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_GetArrayCapacity) {
+	SealHandleScope shs(isolate);
+	ASSERT(args.length() == 1);
+
+	if ( args[0]->IsJSArray() ) {
+		Handle<JSArray> my_array = args.at<JSArray>(0);
+		int capacity = 0;
+
+		switch (my_array->GetElementsKind()) {
+			case FAST_SMI_ELEMENTS:
+			case FAST_ELEMENTS:
+			case FAST_HOLEY_SMI_ELEMENTS:
+			case FAST_HOLEY_ELEMENTS:
+				capacity = FixedArray::cast( my_array->elements() )->length();
+				break;
+
+			case FAST_DOUBLE_ELEMENTS:
+			case FAST_HOLEY_DOUBLE_ELEMENTS:
+				capacity = FixedDoubleArray::cast( my_array->elements() )->length();
+				break;
+
+			case DICTIONARY_ELEMENTS:
+				capacity = Smi::kMaxValue;
+				break;
+		}
+
+		if ( capacity == Smi::kMaxValue )
+			PrintF( "-->Sorry, array has degenerated to dictionary.\n" );
+		/*else
+			PrintF( "-->Array Capacity = %d<--\n", capacity );*/
+
+		return Smi::FromInt(capacity);
+	}
+	
+	args[0]->ShortPrint();
+	return args[0];
 }
 
 

@@ -15,19 +15,6 @@
 
 using namespace std;
 
-enum InternalEvent {
-#define GetEventName(name, handler) name,
-  EVENTS_LIST(GetEventName)
-  events_count
-#undef GetEventname
-};
-
-EventHandler handlers[] = {
-#define GetEventHandler(name, handler) handler,
-  EVENTS_LIST(GetEventhandler)
-  handlers_count
-#undef GetEventHandler
-};
 
 class State;
 
@@ -52,10 +39,11 @@ public:
   }
 
   virtual bool equals( const State* ) = 0;
+  virtual State* clone() = 0;
 
   // Search for mergable transitions
   // If not, create a new one
-  Transition* transfer(const State* next_state, string reason)
+  State* transfer(const State* next_state, const char* reason)
   {
     int i;
     int size = trans_all.size();
@@ -70,8 +58,9 @@ public:
     if ( i == size ) {
       // We create a new transition
       trans = new Transition;
-      trans->target = next_state;
+      trans->target = next_state->clone();
       trans->reason = new string;
+      trans_all->push_back( trans );
     }
 
     // Record information
@@ -79,7 +68,7 @@ public:
     trans->reason->append(reason);
     trans->reason->push_back('\n');
 
-    return trans;
+    return trans->target;
   }
 };
 
@@ -106,40 +95,165 @@ public:
     return other->code == code &&
       other->shared == shared;
   }
+  
+  State* clone()
+  {
+    FunctionState* new_s = new FunctionState;
+    new_s->set_code( code );
+    new_s->set_shared( shared );
+    return new_s;
+  }
 };
 
 
 map<int, State*> machines;
-FunctionState temp_fstate;
-ObjectState 
+map<int, State*> instance_states;
+FunctionState fstate_t;
 
-// Define hanlder prototypes
+
+// ---------------------Define hanlder prototypes--------------------
 static void 
-create_object(FILE*){}
+create_object(FILE*)
+{
+
+}
 
 static void
-create_function(FILE*)
+create_function(FILE* file)
 {
   int alloc_site;
   int obj_id;
   int source_line;
-  State *fsm;
+  int code;
+  State *cur_s, *next_s;
+  char name_buf[256];
 
-  fscanf( "%d %d %d", &alloc_site,
-	  &obj_id, &source_line );
+
+  strcpy( name_buf, "Create Function " );
+  fscanf( file, "%d %d %d %d %d %s", 
+	  &alloc_site, &obj_id, &source_line,
+	  code, 
+	  name_buf + strlen(name_buf) );
   
-  map<int, State*>::iterator it = machines.find(alloc_site);
-  if ( it == machines.end() ) {
+  
+  // Lookup the stat machine
+  if ( machines.find(alloc_site) == machines.end() ) {
     // We construct a new machine
-    fsm = new FunctionState();
-    machines[alloc_site] = fsm;
+    cur_s = new FunctionState;
+    machines[alloc_site] = cur_s;
   }
-  else
-    fsm = it->second();
-
+  else {
+    cur_s = instance_states[obj_id];
+  }
   
+  // Build a new transition
+  fstate_t.set_code(code);
+  fstate_t.set_shared(alloc_site);
+  next_s = cur_s->transfer( &fstate_t, name_buf );
+  instance_states[obj_id] = next_s;
 }
 
+static void
+change_type(FILE* file)
+{
+  // To-do
+}
+
+static void
+expand_array(FILE* file)
+{
+  // To-do
+}
+
+static void
+make_hole(FILE* file)
+{
+  // To-do
+}
+
+static void
+to_slow_mode(FILE* file)
+{
+  // To-do
+}
+
+static void
+array_ops_store_change(FILE* file)
+{
+  // To-do
+}
+
+static void
+array_ops_pure(FILE* file)
+{
+  // To-do
+}
+
+
+static void
+install_code(FILE* file, const char* code_desc)
+{
+  int alloc_site;
+  int obj_id;
+  int source_line;
+  int code;
+  State *cur_s, *next_s;
+
+
+  fscanf( file, "%d %d %d %d %d %s", 
+	  &alloc_site, &obj_id, &source_line,
+	  code );
+  
+  
+  // Lookup the stat machine
+  if ( machines.find(alloc_site) == machines.end() ) {
+    // We construct a new machine
+    cur_s = new FunctionState;
+    machines[alloc_site] = cur_s;
+  }
+  else {
+    cur_s = instance_states[obj_id];
+  }
+  
+  // Build a new transition
+  fstate_t.set_code(code);
+  fstate_t.set_shared(alloc_site);
+  next_s = cur_s->transfer( &fstate_t, code_desc );
+  instance_states[obj_id] = next_s;
+}
+
+static void
+gen_full_code(FILE* file)
+{
+  install_code(file, "Full" );
+}
+
+static void
+gen_opt_code(FILE* file)
+{
+  install_code(file, "Optimize" );
+}
+
+static void
+gen_osr_code(FILE* file)
+{
+  install_code(file, "OSR" );
+}
+
+// ---------------------------
+enum InternalEvent {
+#define GetEventName(name, handler) name,
+  EVENTS_LIST(GetEventName)
+  events_count
+#undef GetEventname
+};
+
+EventHandler handlers[] = {
+#define GetEventHandler(name, handler) handler,
+  EVENTS_LIST(GetEventhandler)
+  handlers_count
+#undef GetEventHandler
+};
 
 
 static int 
@@ -155,6 +269,18 @@ build_automata()
     handlers[event_type](file);
   }
 }
+
+static void
+output_graphviz()
+{
+  map<int,State*>::iterator it = machines.begin();
+
+  while ( it != machines.end() ) {
+    State* fsm = it->second();
+    
+  }
+}
+
 
 int main(int argc, char** argv)
 {
