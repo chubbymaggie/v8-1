@@ -625,7 +625,7 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
     Handle<SharedFunctionInfo> function_info,
     Handle<Context> context,
     PretenureFlag pretenure) {
-	  static int id_counter = 0;
+  //static int id_counter = 0;
   Handle<JSFunction> result = BaseNewFunctionFromSharedFunctionInfo(
       function_info,
       MapForNewFunction(isolate(), function_info),

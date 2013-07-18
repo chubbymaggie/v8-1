@@ -670,7 +670,7 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 
   // Followed are handlers for different event types
   switch(event) {
-  case InternalEvent::CreateFunction:
+  case CreateFunction:
 	{
 	  // Compute the position of this function in source code
 	  Handle<Script> script(Script::cast(shared->script()));
@@ -688,11 +688,11 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
-  case InternalEvent::GenFullCode:
+  case GenFullCode:
 	msg.Append(" %p", new_code);
 	break;
 
-  case InternalEvent::GenFullWithDeopt:
+  case GenFullWithDeopt:
 	{
 	  Address old_code = func->code()->address();
 	  msg.Append(" %p %p",
@@ -700,8 +700,8 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
-  case InternalEvent::GenOptCode:
-  case InternalEvent::GenOsrCode:
+  case GenOptCode:
+  case GenOsrCode:
 	{
 	  const int kMaxOptCount =
 		(FLAG_deopt_every_n_times == 0 ? FLAG_max_opt_count : 1000) + 1;
@@ -713,12 +713,12 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
-  case InternalEvent::DisableOpt:
-  case InternalEvent::ReenableOpt:
+  case DisableOpt:
+  case ReenableOpt:
 	msg.Append("%s", add_msg);
 	break;
 
-  case InternalEvent::OptFailed:
+  case OptFailed:
 	{
 	  if ( add_msg != NULL )
 		msg.Append(" %s", add_msg);
@@ -728,7 +728,7 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
-  case InternalEvent::DeoptCode:
+  case DeoptCode:
 	{
 	  msg.Append(" %p %s", new_code, add_msg);
 	}

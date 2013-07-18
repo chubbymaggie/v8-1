@@ -149,7 +149,7 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
 	if ( FLAG_trace_function_internals ) {
 	  Handle<JSFunction> function = compiler->info()->closure();
 	  Handle<Code> code = compiler->info()->code();
-	  PrintF("------>Parallel optimizing code = %p \n", *code);
+	  //PrintF("------>Parallel optimizing code = %p \n", *code);
 	  Flush();
 
 	  LOG(Isolate::Current(),

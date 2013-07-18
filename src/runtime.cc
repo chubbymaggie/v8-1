@@ -8093,7 +8093,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	if ( FLAG_trace_function_internals ) {
 	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::OptFailed,
+		  Logger::OptFailed,
 		  *function,
 		  new_code,
 		  shared, "@5")
@@ -9316,9 +9316,10 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetArrayCapacity) {
 				capacity = FixedDoubleArray::cast( my_array->elements() )->length();
 				break;
 
-			case DICTIONARY_ELEMENTS:
+		default:
 				capacity = Smi::kMaxValue;
 				break;
+					  
 		}
 
 		if ( capacity == Smi::kMaxValue )
