@@ -27,6 +27,7 @@ shell_g
 /build/Debug
 /build/gyp
 /build/Release
+/build/all.sdf
 /obj
 /out
 /test/cctest/cctest.status2
