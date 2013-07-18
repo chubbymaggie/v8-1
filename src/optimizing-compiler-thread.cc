@@ -154,7 +154,7 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
 
 	  LOG(Isolate::Current(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::GenOptCode,
+		  Logger::GenOptCode,
 		  *function,
 		  *code,
 		  function->shared())

@@ -404,7 +404,7 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
 	  if ( FLAG_trace_function_internals ) {
 		LOG(shared->GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::GenFullWithDeopt,
+		  Logger::GenFullWithDeopt,
 		  *(info()->closure()),
 		  shared->code(),
 		  *shared)

@@ -9362,7 +9362,7 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
   if ( FLAG_trace_function_internals ) {
 	LOG(Isolate::Current(),
 	  EmitFunctionEvent(
-		Logger::InternalEvent::GenFullCode,
+		Logger::GenFullCode,
 		*function,
 		function->code(),
 		function->shared()
@@ -9385,7 +9385,7 @@ bool JSFunction::CompileOptimized(Handle<JSFunction> function,
 	if ( FLAG_trace_function_internals ) {
 	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::OptFailed,
+		  Logger::OptFailed,
 		  *function,
 		  function->code(),
 		  function->shared(), "@1")
@@ -9763,7 +9763,7 @@ void SharedFunctionInfo::DisableOptimization(const char* reason) {
   if ( FLAG_trace_function_internals ) {
 	LOG(GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::DisableOpt,
+		  Logger::DisableOpt,
 		  NULL,
 		  NULL,
 		  this, reason)

@@ -640,7 +640,7 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
 
 	LOG(function_info->GetIsolate(),
 		EmitFunctionEvent(
-		Logger::InternalEvent::CreateFunction,
+		Logger::CreateFunction,
 		*result,
 		result->code(),		  // The code might be a lazy compile stub
 		*function_info)

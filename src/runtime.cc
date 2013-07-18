@@ -8114,7 +8114,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	if ( FLAG_trace_function_internals ) {
 	  LOG(function->GetIsolate(),
 		EmitFunctionEvent(
-		Logger::InternalEvent::GenOptCode,
+		Logger::GenOptCode,
 		*function,
 		code,
 		shared)
@@ -8265,7 +8265,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NotifyDeoptimized) {
 
 	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
-			Logger::InternalEvent::DeoptCode,
+			Logger::DeoptCode,
 			*function,
 			function->code(),
 			function->shared(), "@-1" )
@@ -8528,7 +8528,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
   if ( FLAG_trace_function_internals ) {
 	LOG(Isolate::Current(),
 	  EmitFunctionEvent(
-		(res->value() == -1 ? Logger::InternalEvent::OptFailed : Logger::InternalEvent::GenOsrCode),
+		(res->value() == -1 ? Logger::OptFailed : Logger::GenOsrCode),
 		*function,
 		function->code(),
 		function->shared(), "@6")

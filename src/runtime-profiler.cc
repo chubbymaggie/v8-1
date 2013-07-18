@@ -165,7 +165,7 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
 	if ( FLAG_trace_function_internals ) {
 	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::OptFailed,
+		  Logger::OptFailed,
 		  function,
 		  shared->code(),
 		  shared, "@2")
@@ -181,7 +181,7 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
 	if ( FLAG_trace_function_internals ) {
 	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
-		  Logger::InternalEvent::OptFailed,
+		  Logger::OptFailed,
 		  function,
 		  shared->code(),
 		  shared,
@@ -342,7 +342,7 @@ void RuntimeProfiler::OptimizeNow() {
 	  if ( FLAG_trace_function_internals ) {
 		LOG(function->GetIsolate(),
 			EmitFunctionEvent(
-			Logger::InternalEvent::OptFailed,
+			Logger::OptFailed,
 			function,
 			shared->code(),
 			shared, "@4")

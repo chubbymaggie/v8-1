@@ -4861,7 +4861,7 @@ void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
   if ( FLAG_trace_function_internals ) {
 	LOG( GetIsolate(),
 		EmitFunctionEvent(
-		  Logger::InternalEvent::ReenableOpt,
+		  Logger::ReenableOpt,
 		  NULL,
 		  NULL,
 		  this, reason)
