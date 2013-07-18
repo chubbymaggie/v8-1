@@ -398,6 +398,18 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
       // The existing unoptimized code was replaced with the new one.
       Compiler::RecordFunctionCompilation(
           Logger::LAZY_COMPILE_TAG, &unoptimized, shared);
+
+	  // The newly compiled code may not be inserted into sharedinfo
+	  // Therefore, we use shared->code() 
+	  if ( FLAG_trace_function_internals ) {
+		LOG(shared->GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::InternalEvent::GenFullWithDeopt,
+		  *(info()->closure()),
+		  shared->code(),
+		  *shared)
+		);
+	  }
     }
     if (FLAG_hydrogen_stats) {
       int64_t ticks = OS::Ticks() - start_ticks;

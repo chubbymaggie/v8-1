@@ -340,8 +340,13 @@ class Logger {
 	V(ArrayOpsStoreChange,  array_ops_store_change)       \
 	V(ArrayOpsPure,         array_ops_pure)               \
 	V(GenFullCode,			gen_full_code)               \
+	V(GenFullWithDeopt,		gen_full_deopt)				  \
 	V(GenOptCode,           gen_opt_code)                 \
-	V(GenOsrCode,           gen_osr_code)
+	V(GenOsrCode,           gen_osr_code)				  \
+	V(DisableOpt,			disable_opt)				  \
+	V(ReenableOpt,			reenable_opt)				  \
+	V(OptFailed,			gen_opt_failed)				  \
+	V(DeoptCode,			deopt_code)
 
   enum InternalEvent {
 #define GetEventName(name, handler) name,
@@ -351,8 +356,10 @@ class Logger {
   };
 
   // Trace function actions
+  // Note, we pass func, code, shared separately because 
+  // sometimes, code != func->code(), func == NULL (hence func->shared() is invalid)
   void EmitFunctionEvent(InternalEvent event, JSFunction* func,
-				Code* code, SharedFunctionInfo* shared);
+				Code* code, SharedFunctionInfo* shared, const char* add_msg = NULL);
 
   // Log an event reported from generated code
   void LogRuntime(Vector<const char> format, JSArray* args);

@@ -841,6 +841,9 @@ enum CompareResult {
   inline void set_##name(type* value,                                   \
                          WriteBarrierMode mode = UPDATE_WRITE_BARRIER); \
 
+#define DECL_INT_ACCESSORS(name)                                        \
+  inline int name();													\
+  inline void set_##name(int value);									\
 
 class AccessorPair;
 class DictionaryElementsAccessor;
@@ -6251,7 +6254,7 @@ class SharedFunctionInfo: public HeapObject {
   inline void set_opt_reenable_tries(int value);
   inline int opt_reenable_tries();
 
-  inline void TryReenableOptimization();
+  inline void TryReenableOptimization(const char* reason = NULL);
 
   // Stores deopt_count, opt_reenable_tries and ic_age as bit-fields.
   inline void set_counters(int value);
@@ -6306,10 +6309,11 @@ class SharedFunctionInfo: public HeapObject {
   // into a PSEUDO_SMI_ACCESSORS pair (on x64), if one becomes available.
   static const int kAstNodeCountOffset =
       kInitialMapOffset + kPointerSize;
+
 #if V8_HOST_ARCH_32_BIT
   // Smi fields.
   static const int kLengthOffset =
-      kAstNodeCountOffset + kPointerSize;
+	kAstNodeCountOffset + kPointerSize;
   static const int kFormalParameterCountOffset = kLengthOffset + kPointerSize;
   static const int kExpectedNofPropertiesOffset =
       kFormalParameterCountOffset + kPointerSize;
@@ -6716,6 +6720,8 @@ class JSFunction: public JSObject {
   // Retrieve the native context from a function's literal array.
   static Context* NativeContextFromLiterals(FixedArray* literals);
 
+  //DECL_INT_ACCESSORS(functionID);
+
 #ifdef DEBUG
   bool FunctionsInFunctionListShareSameCode() {
     Object* current = this;
@@ -6739,6 +6745,7 @@ class JSFunction: public JSObject {
       kPrototypeOrInitialMapOffset + kPointerSize;
   static const int kContextOffset = kSharedFunctionInfoOffset + kPointerSize;
   static const int kLiteralsOffset = kContextOffset + kPointerSize;
+  //static const int kFunctionID = kLiteralsOffset + kPointerSize;
   static const int kNonWeakFieldsEndOffset = kLiteralsOffset + kPointerSize;
   static const int kNextFunctionLinkOffset = kNonWeakFieldsEndOffset;
   static const int kSize = kNextFunctionLinkOffset + kPointerSize;
@@ -6751,6 +6758,8 @@ class JSFunction: public JSObject {
   static const int kBoundFunctionIndex = 0;
   static const int kBoundThisIndex = 1;
   static const int kBoundArgumentsStartIndex = 2;
+  
+  //static int id_counter;
 
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(JSFunction);

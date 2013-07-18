@@ -625,17 +625,24 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
     Handle<SharedFunctionInfo> function_info,
     Handle<Context> context,
     PretenureFlag pretenure) {
+	  static int id_counter = 0;
   Handle<JSFunction> result = BaseNewFunctionFromSharedFunctionInfo(
       function_info,
       MapForNewFunction(isolate(), function_info),
       pretenure);
 
+  // Log function create event
+  // We log it before any other changes to it
   if ( FLAG_trace_function_internals ) {
-	LOG(Isolate::Current(),
+	// Assign a counter to this function
+	//result->set_functionID( id_counter++ );
+	//JSFunction::id_counter++;
+
+	LOG(function_info->GetIsolate(),
 		EmitFunctionEvent(
 		Logger::InternalEvent::CreateFunction,
 		*result,
-		NULL,
+		result->code(),		  // The code might be a lazy compile stub
 		*function_info)
 	);
   }
@@ -663,10 +670,9 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
   if (index > 0) {
     // Caching of optimized code enabled and optimized code found.
     function_info->InstallFromOptimizedCodeMap(*result, index);
-    return result;
+    // return result;
   }
-
-  if (V8::UseCrankshaft() &&
+  else if (V8::UseCrankshaft() &&
       FLAG_always_opt &&
       result->is_compiled() &&
       !function_info->is_toplevel() &&
@@ -675,6 +681,7 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
       !isolate()->DebuggerHasBreakPoints()) {
     result->MarkForLazyRecompilation();
   }
+
   return result;
 }
 

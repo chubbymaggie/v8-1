@@ -216,7 +216,7 @@ struct LowLevelCodeCreateStruct {
   static const char kTag = 'C';
 
   int32_t name_size;
-  Address code_address;
+  Address new_code;
   int32_t code_size;
 };
 
@@ -261,20 +261,20 @@ class Logger::NameMap {
     }
   }
 
-  void Insert(Address code_address, const char* name, int name_size) {
-    HashMap::Entry* entry = FindOrCreateEntry(code_address);
+  void Insert(Address new_code, const char* name, int name_size) {
+    HashMap::Entry* entry = FindOrCreateEntry(new_code);
     if (entry->value == NULL) {
       entry->value = CopyName(name, name_size);
     }
   }
 
-  const char* Lookup(Address code_address) {
-    HashMap::Entry* entry = FindEntry(code_address);
+  const char* Lookup(Address new_code) {
+    HashMap::Entry* entry = FindEntry(new_code);
     return (entry != NULL) ? static_cast<const char*>(entry->value) : NULL;
   }
 
-  void Remove(Address code_address) {
-    HashMap::Entry* entry = FindEntry(code_address);
+  void Remove(Address new_code) {
+    HashMap::Entry* entry = FindEntry(new_code);
     if (entry != NULL) {
       DeleteArray(static_cast<char*>(entry->value));
       RemoveEntry(entry);
@@ -308,12 +308,12 @@ class Logger::NameMap {
     return result;
   }
 
-  HashMap::Entry* FindOrCreateEntry(Address code_address) {
-    return impl_.Lookup(code_address, ComputePointerHash(code_address), true);
+  HashMap::Entry* FindOrCreateEntry(Address new_code) {
+    return impl_.Lookup(new_code, ComputePointerHash(new_code), true);
   }
 
-  HashMap::Entry* FindEntry(Address code_address) {
-    return impl_.Lookup(code_address, ComputePointerHash(code_address), false);
+  HashMap::Entry* FindEntry(Address new_code) {
+    return impl_.Lookup(new_code, ComputePointerHash(new_code), false);
   }
 
   void RemoveEntry(HashMap::Entry* entry) {
@@ -649,47 +649,100 @@ void Logger::CodeDeoptEvent(Code* code) {
 
 
 void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
-				Code* code, SharedFunctionInfo* shared) {
+				Code* code, SharedFunctionInfo* shared, const char* add_msg) {
   if (!log_->IsEnabled()) return;
   LogMessageBuilder msg(this);
 
-  Handle<Script> script(Script::cast(shared->script()));
-  int line_num = GetScriptLineNumber( script, 
-		  							shared->start_position()) + 1;
-  int code_address = 0;
-  if ( code != NULL ) code_address = (int)code->address();
+  // Format the input parameters
+  Address new_code = NULL;
+  if ( code != NULL ) new_code = code->address();
 
-  //PrintF("Event = %d\n", event);
-  msg.Append("%d %p %p %d", 
+  Address shared_addr = NULL;
+  if ( shared != NULL ) shared_addr = shared->address();
+
+  Address func_id = NULL;
+  if ( func != NULL ) func_id = func->address();
+
+  msg.Append("%d %p %d", 
 	  event,
-	  shared->address(),
-	  func->address(),
-	  line_num);
+	  shared_addr,
+	  func_id);
 
   // Followed are handlers for different event types
   switch(event) {
   case InternalEvent::CreateFunction:
 	{
+	  // Compute the position of this function in source code
+	  Handle<Script> script(Script::cast(shared->script()));
+	  int line_num = GetScriptLineNumber( script, 
+		  								  shared->start_position()) + 1;
+
+	  // Inspect the name of this function
 	  String* debug_name = shared->DebugName();
-	  const char* name = NULL;
-	  if ( debug_name->length() == 0 )
-		name = "Anonymous Closure";
-	  else
-		name = *(debug_name->ToCString());
+	  char name_buf[32];
+	  sprintf(name_buf, "%s@%d", 
+				((debug_name->length() == 0) ? "Closure" : *(debug_name->ToCString())),
+				line_num);
 	  
-	  msg.Append("%d %s", code_address, name );
+	  msg.Append(" %p %s", new_code, name_buf);
+	}
+	break;
+
+  case InternalEvent::GenFullCode:
+	msg.Append(" %p", new_code);
+	break;
+
+  case InternalEvent::GenFullWithDeopt:
+	{
+	  Address old_code = func->code()->address();
+	  msg.Append(" %p %p",
+			old_code, new_code);
 	}
 	break;
 
   case InternalEvent::GenOptCode:
-  case InternalEvent::GenFullCode:
   case InternalEvent::GenOsrCode:
-	msg.Append("%p", code_address );
+	{
+	  const int kMaxOptCount =
+		(FLAG_deopt_every_n_times == 0 ? FLAG_max_opt_count : 1000) + 1;
+
+	    msg.Append(" %p %d|%d",
+		  new_code,
+		  shared->opt_count(), 
+		  kMaxOptCount ); 
+	}
+	break;
+
+  case InternalEvent::DisableOpt:
+  case InternalEvent::ReenableOpt:
+	msg.Append("%s", add_msg);
+	break;
+
+  case InternalEvent::OptFailed:
+	{
+	  if ( add_msg != NULL )
+		msg.Append(" %s", add_msg);
+	  else
+		// Use the error message issued by DisableOpt
+		msg.Append(" -");
+	}
+	break;
+
+  case InternalEvent::DeoptCode:
+	{
+	  msg.Append(" %p %s", new_code, add_msg);
+	}
 	break;
 
   default:
 	break;
   }
+
+  /*if ( event == InternalEvent::GenOptCode ) {
+	PrintF("----------Inside log: %d %p %d\n", 
+	  event, shared_addr, func_id);
+	Flush();
+  }*/
 
   msg.Append("\n");
   msg.WriteToLogFile();
@@ -1640,8 +1693,8 @@ void Logger::LowLevelCodeCreateEvent(Code* code,
   if (log_->ll_output_handle_ == NULL) return;
   LowLevelCodeCreateStruct event;
   event.name_size = name_size;
-  event.code_address = code->instruction_start();
-  ASSERT(event.code_address == code->address() + Code::kHeaderSize);
+  event.new_code = code->instruction_start();
+  ASSERT(event.new_code == code->address() + Code::kHeaderSize);
   event.code_size = code->instruction_size();
   LowLevelLogWriteStruct(event);
   LowLevelLogWriteBytes(name, name_size);

@@ -1339,7 +1339,7 @@ void JSObject::JSObjectShortPrint(StringStream* accumulator) {
       }
       accumulator->Add(" (SharedFunctionInfo %p)",
                        reinterpret_cast<void*>(function->shared()));
-	  accumulator->Add(", (Map %p)", reinterpret_cast<void*>(function->map()));
+	  //accumulator->Add(", (Map %p)", reinterpret_cast<void*>(function->map()));
       accumulator->Put('>');
       break;
     }
@@ -9345,6 +9345,7 @@ void SharedFunctionInfo::TrimOptimizedCodeMap(int shrink_by) {
   }
 }
 
+//int JSFunction::id_counter = 0;
 
 bool JSFunction::CompileLazy(Handle<JSFunction> function,
                              ClearExceptionFlag flag) {
@@ -9357,6 +9358,18 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
     result = CompileLazyHelper(&info, flag);
     ASSERT(!result || function->is_compiled());
   }
+
+  if ( FLAG_trace_function_internals ) {
+	LOG(Isolate::Current(),
+	  EmitFunctionEvent(
+		Logger::InternalEvent::GenFullCode,
+		*function,
+		function->code(),
+		function->shared()
+	  )
+	);
+  }
+
   return result;
 }
 
@@ -9366,7 +9379,21 @@ bool JSFunction::CompileOptimized(Handle<JSFunction> function,
                                   ClearExceptionFlag flag) {
   CompilationInfoWithZone info(function);
   info.SetOptimizing(osr_ast_id);
-  return CompileLazyHelper(&info, flag);
+  bool res = CompileLazyHelper(&info, flag);
+  if ( res == false ) {
+	// Something wrong happened during optimization 
+	if ( FLAG_trace_function_internals ) {
+	  LOG(function->GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::InternalEvent::OptFailed,
+		  *function,
+		  function->code(),
+		  function->shared(), "@1")
+		);
+	}
+  }
+
+  return res;
 }
 
 
@@ -9721,7 +9748,7 @@ void SharedFunctionInfo::DisableOptimization(const char* reason) {
   // regenerated and set on the shared function info it is marked as
   // non-optimizable if optimization is disabled for the shared
   // function info.
-  set_optimization_disabled(true);
+  set_optimization_disabled(true); 
   // Code should be the lazy compilation stub or else unoptimized.  If the
   // latter, disable optimization for the code too.
   ASSERT(code()->kind() == Code::FUNCTION || code()->kind() == Code::BUILTIN);
@@ -9732,6 +9759,15 @@ void SharedFunctionInfo::DisableOptimization(const char* reason) {
     PrintF("[disabled optimization for ");
     ShortPrint();
     PrintF(", reason: %s]\n", reason);
+  }
+  if ( FLAG_trace_function_internals ) {
+	LOG(GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::InternalEvent::DisableOpt,
+		  NULL,
+		  NULL,
+		  this, reason)
+	  );
   }
 }
 

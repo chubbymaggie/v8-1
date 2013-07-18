@@ -1040,6 +1040,11 @@ MaybeObject* Object::GetProperty(Name* key, PropertyAttributes* attributes) {
 #define WRITE_BYTE_FIELD(p, offset, value) \
   (*reinterpret_cast<byte*>(FIELD_ADDR(p, offset)) = value)
 
+#define READ_ANYTYPE_FIELD(type, p, offset) \
+  (*reinterpret_cast<type*>(FIELD_ADDR(p, offset)))
+
+#define WRITE_ANYTYPE_FIELD(type, p, offset, value) \
+  (*reinterpret_cast<type*>(FIELD_ADDR(p, offset)) = value)
 
 Object** HeapObject::RawField(HeapObject* obj, int byte_offset) {
   return &READ_FIELD(obj, byte_offset);
@@ -4371,6 +4376,7 @@ ACCESSORS(Map, constructor, Object, kConstructorOffset)
 
 ACCESSORS(JSFunction, shared, SharedFunctionInfo, kSharedFunctionInfoOffset)
 ACCESSORS(JSFunction, literals_or_bindings, FixedArray, kLiteralsOffset)
+//INT_ACCESSORS(JSFunction, functionID, kFunctionID)
 ACCESSORS(JSFunction, next_function_link, Object, kNextFunctionLinkOffset)
 
 ACCESSORS(GlobalObject, builtins, JSBuiltinsObject, kBuiltinsOffset)
@@ -4490,7 +4496,6 @@ ACCESSORS(SharedFunctionInfo, debug_info, Object, kDebugInfoOffset)
 ACCESSORS(SharedFunctionInfo, inferred_name, String, kInferredNameOffset)
 SMI_ACCESSORS(SharedFunctionInfo, ast_node_count, kAstNodeCountOffset)
 
-
 SMI_ACCESSORS(FunctionTemplateInfo, length, kLengthOffset)
 BOOL_ACCESSORS(FunctionTemplateInfo, flag, hidden_prototype,
                kHiddenPrototypeBit)
@@ -4520,7 +4525,6 @@ BOOL_ACCESSORS(SharedFunctionInfo,
                compiler_hints,
                has_duplicate_parameters,
                kHasDuplicateParameters)
-
 
 #if V8_HOST_ARCH_32_BIT
 SMI_ACCESSORS(SharedFunctionInfo, length, kLengthOffset)
@@ -4842,7 +4846,7 @@ bool SharedFunctionInfo::has_deoptimization_support() {
 }
 
 
-void SharedFunctionInfo::TryReenableOptimization() {
+void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
   int tries = opt_reenable_tries();
   set_opt_reenable_tries((tries + 1) & OptReenableTriesBits::kMax);
   // We reenable optimization whenever the number of tries is a large
@@ -4853,8 +4857,17 @@ void SharedFunctionInfo::TryReenableOptimization() {
     set_deopt_count(0);
     code()->set_optimizable(true);
   }
-}
 
+  if ( FLAG_trace_function_internals ) {
+	LOG( GetIsolate(),
+		EmitFunctionEvent(
+		  Logger::InternalEvent::ReenableOpt,
+		  NULL,
+		  NULL,
+		  this, reason)
+		 );
+  }
+}
 
 bool JSFunction::IsBuiltin() {
   return context()->global_object()->IsJSBuiltinsObject();

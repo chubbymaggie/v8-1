@@ -145,6 +145,21 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
       if (!output_queue_.Dequeue(&compiler)) return;
     }
     Compiler::InstallOptimizedCode(compiler);
+	
+	if ( FLAG_trace_function_internals ) {
+	  Handle<JSFunction> function = compiler->info()->closure();
+	  Handle<Code> code = compiler->info()->code();
+	  PrintF("------>Parallel optimizing code = %p \n", *code);
+	  Flush();
+
+	  LOG(Isolate::Current(),
+		  EmitFunctionEvent(
+		  Logger::InternalEvent::GenOptCode,
+		  *function,
+		  *code,
+		  function->shared())
+		);
+	}
   }
 }
 

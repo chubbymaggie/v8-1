@@ -8052,15 +8052,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyCompile) {
 
   // All done. Return the compiled code.
   ASSERT(function->is_compiled());
-  if ( FLAG_trace_function_internals ) {
-	LOG(Isolate::Current(),
-	  EmitFunctionEvent(
-	  Logger::InternalEvent::GenFullCode,
-	  *function,
-	  function->code(),
-	  function->shared())
-	);
-  }
   return function->code();
 }
 
@@ -8094,31 +8085,53 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
   ASSERT(args.length() == 1);
   Handle<JSFunction> function = args.at<JSFunction>(0);
 
+  SharedFunctionInfo *shared = function->shared();
   if (!AllowOptimization(isolate, function)) {
-    function->ReplaceCode(function->shared()->code());
-    return function->code();
+	Code* new_code = shared->code();
+	function->ReplaceCode(new_code);
+	// Perhaps the optimization channel is disabled
+	if ( FLAG_trace_function_internals ) {
+	  LOG(function->GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::InternalEvent::OptFailed,
+		  *function,
+		  new_code,
+		  shared, "@5")
+		);
+	}
+    return new_code;
   }
+
   function->shared()->code()->set_profiler_ticks(0);
   if (JSFunction::CompileOptimized(function,
                                    BailoutId::None(),
                                    CLEAR_EXCEPTION)) {
+	// Generate optimized code successfully
+	Code* code = function->code();
+	//PrintF("------>Optimizing code = %p\n", code);
+	//Flush();
+
 	if ( FLAG_trace_function_internals ) {
-	  LOG(Isolate::Current(),
+	  LOG(function->GetIsolate(),
 		EmitFunctionEvent(
 		Logger::InternalEvent::GenOptCode,
 		*function,
-		function->code(),
-		function->shared())
+		code,
+		shared)
 	  );
 	}
-    return function->code();
+
+    return code;
   }
+
   if (FLAG_trace_opt) {
     PrintF("[failed to optimize ");
     function->PrintName();
     PrintF(": optimized compilation failed]\n");
   }
-  function->ReplaceCode(function->shared()->code());
+
+  // Although optimizing failed, the uncompiled code can be compiled again with deoptimization support
+  function->ReplaceCode(shared->code());
   return function->code();
 }
 
@@ -8238,6 +8251,26 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NotifyDeoptimized) {
       PrintF("]\n");
     }
     function->ReplaceCode(function->shared()->code());
+
+	if ( FLAG_trace_function_internals ) {
+	  //char buf[20];
+	  //sprintf(buf, "Deopt@%d", deoptimizer->bailout_id_);
+
+	  /*PrintF( "Deopt: %p %p %p %p\n", 
+		function->GetIsolate(), 
+		*function, 
+		function->code(), 
+		function->shared() );
+		*/
+
+	  LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::InternalEvent::DeoptCode,
+			*function,
+			function->code(),
+			function->shared(), "@-1" )
+		);
+	}
   } else {
     Deoptimizer::DeoptimizeFunction(*function);
   }
@@ -8481,25 +8514,28 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
   // If the optimization attempt succeeded, return the AST id tagged as a
   // smi. This tells the builtin that we need to translate the unoptimized
   // frame to an optimized one.
+  Smi* res = NULL;
   if (succeeded) {
     ASSERT(function->code()->kind() == Code::OPTIMIZED_FUNCTION);
-	if ( FLAG_trace_function_internals ) {
-	  LOG(Isolate::Current(),
-		  EmitFunctionEvent(
-			Logger::InternalEvent::GenOsrCode,
-			*function,
-			function->code(),
-			function->shared()
-		  )
-	  );
-	}
-    return Smi::FromInt(ast_id.ToInt());
+    res = Smi::FromInt(ast_id.ToInt());
   } else {
     if (function->IsMarkedForLazyRecompilation()) {
       function->ReplaceCode(function->shared()->code());
     }
-    return Smi::FromInt(-1);
+    res = Smi::FromInt(-1);
   }
+
+  if ( FLAG_trace_function_internals ) {
+	LOG(Isolate::Current(),
+	  EmitFunctionEvent(
+		(res->value() == -1 ? Logger::InternalEvent::OptFailed : Logger::InternalEvent::GenOsrCode),
+		*function,
+		function->code(),
+		function->shared(), "@6")
+	);
+  }
+
+  return res;
 }
 
 

@@ -7,150 +7,113 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
-#include <vector>
-#include <map>
-#include <set>
+#include <string>
+#include <queue>
 #include "options.h"
 #include "events.h"
+#include "state_machine.h"
 
-using namespace std;
+
+// Globals
+map<int, StateMachine*> machines;
 
 
-class State;
-
-struct Transition
+// Create a state transition
+State* 
+transfer(StateMachine* fsm, 
+	 State* cur_s, State* next_s, 
+	 const char* desc)
 {
-  State* target;
-  int count;
-  string* reason;
+  Transition* trans;
   
-  Transition(): target(NULL), count(0), reason(NULL) {}
-};
-
-// Base class for all states
-class State 
-{
-protected:
-  Vector<Transition*> trans_all;
+  // Search for the same state
+  trans = cur_s->find_transition(next_s);
   
-public:
-  State() {
-    trans_all.clear();
+  if ( trans == NULL ) {
+    // Not exist
+    // We try to search and add to the state machine pool
+    next_s = fsm->search_state(next_s);
+    trans = cur_s->add_transition(next_s);
   }
+  else {
+    next_s = trans->target;
+  }
+  
+  trans->count++;
+  trans->insert_reason(desc);
+  return next_s;
+}
 
-  virtual bool equals( const State* ) = 0;
-  virtual State* clone() = 0;
 
-  // Search for mergable transitions
-  // If not, create a new one
-  State* transfer(const State* next_state, const char* reason)
-  {
-    int i;
-    int size = trans_all.size();
-    Transition* trans;
+StateMachine* 
+find_machine(int m_sig, StateMachine::Mtype type)
+{
+  StateMachine* fsm = NULL;
+  map<int, StateMachine*>::iterator i_fsm = machines.find(m_sig);
 
-    for ( i = 0; i < size; ++i ) {
-      trans = trans_all[i];
-      if ( trans->target->equals(next_state) )
-	break;
-    }
+  if ( i_fsm != machines.end() ) {
+    fsm = i_fsm->second;
+  }
+  else{
+    if ( type == StateMachine::Mtype::Function )
+      fsm = new FunctionMachine;
+    else
+      fsm = new ObjectMachine;
     
-    if ( i == size ) {
-      // We create a new transition
-      trans = new Transition;
-      trans->target = next_state->clone();
-      trans->reason = new string;
-      trans_all->push_back( trans );
-    }
-
-    // Record information
-    trans->count++;
-    trans->reason->append(reason);
-    trans->reason->push_back('\n');
-
-    return trans->target;
+    machines[m_sig] = fsm;
   }
-};
+  
+  return fsm;
+}
 
 
-class FunctionState : public State
+StateMachine*
+install_code( StateMachine* fsm,
+	      int func, int code, const char* trans_desc)
 {
-private:
-  int code;
-  int shared;
-
-
-public:
-  State():
-    code(0),
-    shared(0) { }
-
-  void set_code(int new_code) { code = new_code;}
-  int get_code() { return code; }
-
-  void set_shared(int new_shared) { shared = new_shared; }
-  int get_shared() { return shared; }
+  static FunctionState fstate_t(0);
+  FunctionState *cur_s, *next_s;
   
-  bool equals(const State* other) {
-    return other->code == code &&
-      other->shared == shared;
-  }
+  // Obtain current position of this function
+  cur_s = (FunctionState*)fsm->get_instance_pos(func);
   
-  State* clone()
-  {
-    FunctionState* new_s = new FunctionState;
-    new_s->set_code( code );
-    new_s->set_shared( shared );
-    return new_s;
-  }
-};
+  // Build the target state
+  fstate_t.code = (code == -1 ? cur_s->code : code);
+   
+  // Transfer state
+  next_s = 
+    (FunctionState*)transfer( fsm, cur_s, &fstate_t, trans_desc );
+  fsm->instance_walk_to(func, next_s);
 
-
-map<int, State*> machines;
-map<int, State*> instance_states;
-FunctionState fstate_t;
+  return fsm;
+}
 
 
 // ---------------------Define hanlder prototypes--------------------
 static void 
 create_object(FILE*)
 {
-
+  // To do..
 }
+
 
 static void
 create_function(FILE* file)
 {
-  int alloc_site;
-  int obj_id;
-  int source_line;
+  int shared;
+  int func;
   int code;
-  State *cur_s, *next_s;
   char name_buf[256];
 
 
-  strcpy( name_buf, "Create Function " );
-  fscanf( file, "%d %d %d %d %d %s", 
-	  &alloc_site, &obj_id, &source_line,
-	  code, 
-	  name_buf + strlen(name_buf) );
+  fscanf( file, "%p %d %p %s", 
+	  &shared, &func, &code, 
+	  name_buf );
   
-  
-  // Lookup the stat machine
-  if ( machines.find(alloc_site) == machines.end() ) {
-    // We construct a new machine
-    cur_s = new FunctionState;
-    machines[alloc_site] = cur_s;
-  }
-  else {
-    cur_s = instance_states[obj_id];
-  }
-  
-  // Build a new transition
-  fstate_t.set_code(code);
-  fstate_t.set_shared(alloc_site);
-  next_s = cur_s->transfer( &fstate_t, name_buf );
-  instance_states[obj_id] = next_s;
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  fsm->set_machine_name( name_buf );
+  install_code(fsm, func, code, "New");  
 }
 
 static void
@@ -189,55 +152,133 @@ array_ops_pure(FILE* file)
   // To-do
 }
 
-
-static void
-install_code(FILE* file, const char* code_desc)
-{
-  int alloc_site;
-  int obj_id;
-  int source_line;
-  int code;
-  State *cur_s, *next_s;
-
-
-  fscanf( file, "%d %d %d %d %d %s", 
-	  &alloc_site, &obj_id, &source_line,
-	  code );
-  
-  
-  // Lookup the stat machine
-  if ( machines.find(alloc_site) == machines.end() ) {
-    // We construct a new machine
-    cur_s = new FunctionState;
-    machines[alloc_site] = cur_s;
-  }
-  else {
-    cur_s = instance_states[obj_id];
-  }
-  
-  // Build a new transition
-  fstate_t.set_code(code);
-  fstate_t.set_shared(alloc_site);
-  next_s = cur_s->transfer( &fstate_t, code_desc );
-  instance_states[obj_id] = next_s;
-}
-
 static void
 gen_full_code(FILE* file)
 {
-  install_code(file, "Full" );
+  int shared, func, code;
+  fscanf( file, "%p %d %p", &shared, &func, &code );
+  
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  install_code( fsm, func, code, "Full" );
+}
+
+static void
+gen_full_deopt(FILE* file)
+{
+  int shared, func, old_code, new_code;
+  fscanf( file, "%p %d %p %p", 
+	  &shared, &func, 
+	  &old_code, &new_code );
+  
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  install_code( fsm, func, new_code, "AddDeopt" );
 }
 
 static void
 gen_opt_code(FILE* file)
 {
-  install_code(file, "Optimize" );
+  int shared, func, code;
+  char opt_buf[128];
+  
+  sprintf( opt_buf, "Opt: " );
+  fscanf( file, "%p %d %p %s", 
+	  &shared, &func, &code, 
+	  opt_buf + strlen(opt_buf) );
+
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  install_code( fsm, func, code, opt_buf );
 }
 
 static void
 gen_osr_code(FILE* file)
 {
-  install_code(file, "OSR" );
+  int shared, func, code;
+  char opt_buf[128];
+
+  sprintf( opt_buf, "Osr: " );
+  fscanf( file, "%p %d %p %s",
+          &shared, &func, &code, opt_buf + strlen(opt_buf) );
+
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  install_code( fsm, func, code, opt_buf );
+}
+
+static void
+disable_opt(FILE* file)
+{
+  int shared, func, code;
+  char opt_buf[128];
+
+  fscanf( file, "%p %d %p %s",
+          &shared, &func, &code, opt_buf );
+
+  FunctionMachine* fsm = 
+    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+  fsm->set_opt_state( false, opt_buf );
+}
+
+static void
+reenable_opt(FILE* file)
+{
+  int shared, func, code;
+  char opt_buf[128];
+
+  fscanf( file, "%p %d %p %s",
+          &shared, &func, &code, opt_buf );
+
+  FunctionMachine* fsm = 
+    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+  fsm->set_opt_state( true, opt_buf );
+}
+
+static void
+gen_opt_failed(FILE* file)
+{
+  int shared, func;
+  char opt_buf[128];
+
+  sprintf( opt_buf, "OptFailed: " );
+  int last_pos = strlen(opt_buf);
+
+  fscanf( file, "%p %d %[^\t\n]",
+          &shared, &func, opt_buf + last_pos );
+
+  FunctionMachine* fsm = 
+    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+
+  if ( opt_buf[last_pos] == '-' &&
+       opt_buf[last_pos+1] == '\0' ) {
+    // Reuse the disable message
+    sprintf( opt_buf+last_pos, "%s", fsm->optMsg.c_str() );
+  }
+
+  install_code( fsm, func, -1, opt_buf );
+}
+
+static void
+deopt_code(FILE* file)
+{
+  int shared, func, code;
+  char opt_buf[128];
+  
+  sprintf( opt_buf, "Deopt: " );
+  fscanf( file, "%p %d %p %s", 
+	  &shared, &func, &code, 
+	  opt_buf + strlen(opt_buf) );
+
+  StateMachine* fsm = find_machine(shared,
+				   StateMachine::Mtype::Function);
+  install_code( fsm, func, code, opt_buf );
+}
+
+static void
+null_handler(FILE* file)
+{
+
 }
 
 // ---------------------------
@@ -250,8 +291,8 @@ enum InternalEvent {
 
 EventHandler handlers[] = {
 #define GetEventHandler(name, handler) handler,
-  EVENTS_LIST(GetEventhandler)
-  handlers_count
+  EVENTS_LIST(GetEventHandler)
+  null_handler
 #undef GetEventHandler
 };
 
@@ -268,17 +309,98 @@ build_automata()
   while ( fscanf(file, "%d", &event_type) == 1 ) {
     handlers[event_type](file);
   }
+  
+  fclose(file);
+  return 1;
 }
 
 static void
 output_graphviz()
 {
-  map<int,State*>::iterator it = machines.begin();
+  FILE* file;
+  int n_graph;
+  int n_states;
+  queue<State*> bfsQ;
+  set<State*> visited;
 
-  while ( it != machines.end() ) {
-    State* fsm = it->second();
-    
+  file = fopen(visual_file, "w");
+  if ( file == NULL ) {
+    fprintf(stderr, "Cannot create visualization file %s\n", visual_file);
+    return;
   }
+
+  // Do BFS to draw graph
+  n_graph = 0;
+  for ( map<int,StateMachine*>::iterator it = machines.begin();
+	it != machines.end();
+	++it ) {
+    StateMachine* fsm = it->second;
+    if ( fsm->size() < 4 ) continue;
+
+    State* init_state = fsm->start;
+    fprintf(file, "digraph G%d {\n", n_graph);
+    ++n_graph;
+    
+    // Go over the state machine
+    visited.clear();
+    visited.insert(init_state);
+    bfsQ.push(init_state);
+
+    while ( !bfsQ.empty() ) {
+      State* cur_s = bfsQ.front();
+      bfsQ.pop();
+      
+      // We first generate the node description
+      int id;
+      
+      if ( cur_s == init_state ) {
+	id = 0;
+	fprintf(file, 
+		"\t0 [shape=ellipse, peripheries=2, label=\"%s\"];\n",
+		fsm->machine_name.c_str() );
+      }
+      else {
+	id = cur_s->id;
+	fprintf(file, 
+		"\t%d [shape=box, label=\"%s\"];\n", 
+		id, 
+		cur_s->descriptor().c_str());
+      }
+      
+      // We draw the transition edges
+      State::TransIterator it = cur_s->begin();
+      State::TransIterator end = cur_s->end();
+      for ( ;
+	    it != end; ++it ) {
+	Transition* trans = it->second;
+	State* next_s = trans->target;
+	if ( visited.find(next_s) == visited.end() ) {
+	  bfsQ.push(next_s);
+	  visited.insert(next_s);
+	}
+	
+	// Generate the transition descriptive string
+	string* reason = trans->merge_reasons();
+	const char* desc = NULL;
+	if ( trans->count == 1 )
+	  desc = "\t%d -> %d [label=\"%s\"];\n";
+	else
+	  desc = "\t%d -> %d [label=\"%s//%dX\"];\n";
+
+	fprintf(file, 
+		desc,
+		id, next_s->id, 
+		reason->c_str(),
+		trans->count);
+
+	delete reason;
+      }
+    }
+
+    fprintf(file, "}\n\n");
+  }
+  
+  fclose(file);
 }
 
 
@@ -292,7 +414,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  if ( visualize )
+  if ( visual_file != NULL )
     output_graphviz();
 
   return 0;

@@ -13,12 +13,17 @@
   V(ToSlowMode,           to_slow_mode)			\
   V(ArrayOpsStoreChange,  array_ops_store_change)	\
   V(ArrayOpsPure,         array_ops_pure)		\
-  V(GenFullCode,          gen_full_code)		\
-  V(GenOptCode,           gen_opt_code)			\
-  V(GenOsrCode,           gen_osr_code)			
+  V(GenFullCode,          gen_full_code)				\
+  V(GenFullWithDeopt,     gen_full_deopt)				\
+  V(GenOptCode,           gen_opt_code)					\
+  V(GenOsrCode,           gen_osr_code)					\
+  V(DisableOpt,           disable_opt)					\
+  V(ReenableOpt,          reenable_opt)					\
+  V(OptFailed,            gen_opt_failed)				\
+  V(DeoptCode,            deopt_code)			
 
 
-typedef void (*EVENT_HANDLER)(FILE*);
+typedef void (*EventHandler)(FILE*);
 
 
 #endif
