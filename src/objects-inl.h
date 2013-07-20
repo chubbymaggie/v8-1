@@ -4376,7 +4376,7 @@ ACCESSORS(Map, constructor, Object, kConstructorOffset)
 
 ACCESSORS(JSFunction, shared, SharedFunctionInfo, kSharedFunctionInfoOffset)
 ACCESSORS(JSFunction, literals_or_bindings, FixedArray, kLiteralsOffset)
-//INT_ACCESSORS(JSFunction, functionID, kFunctionID)
+INT_ACCESSORS(JSFunction, functionID, kFunctionID)
 ACCESSORS(JSFunction, next_function_link, Object, kNextFunctionLinkOffset)
 
 ACCESSORS(GlobalObject, builtins, JSBuiltinsObject, kBuiltinsOffset)
@@ -4859,13 +4859,16 @@ void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
   }
 
   if ( FLAG_trace_function_internals ) {
-	LOG( GetIsolate(),
-		EmitFunctionEvent(
-		  Logger::ReenableOpt,
-		  NULL,
-		  NULL,
-		  this, reason)
-		 );
+	Code* code = this->code();
+	if ( code->kind() < Code::STUB ) {
+	  LOG( GetIsolate(),
+		  EmitFunctionEvent(
+			Logger::ReenableOpt,
+			NULL,
+			NULL,
+			this, reason)
+		  );
+	} 
   }
 }
 

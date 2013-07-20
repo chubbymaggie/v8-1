@@ -654,14 +654,18 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   LogMessageBuilder msg(this);
 
   // Format the input parameters
+  int func_id = -1;
+  if ( func != NULL ) {
+	func_id = func->functionID();
+	if ( func_id < 5000 )		// A snapshot function
+	  return;
+  }
+
   Address new_code = NULL;
   if ( code != NULL ) new_code = code->address();
 
   Address shared_addr = NULL;
   if ( shared != NULL ) shared_addr = shared->address();
-
-  Address func_id = NULL;
-  if ( func != NULL ) func_id = func->address();
 
   msg.Append("%d %p %d", 
 	  event,
@@ -673,6 +677,7 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   case CreateFunction:
 	{
 	  // Compute the position of this function in source code
+	  
 	  Handle<Script> script(Script::cast(shared->script()));
 	  int line_num = GetScriptLineNumber( script, 
 		  								  shared->start_position()) + 1;
@@ -715,7 +720,7 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 
   case DisableOpt:
   case ReenableOpt:
-	msg.Append("%s", add_msg);
+	msg.Append(" %s", add_msg);
 	break;
 
   case OptFailed:
@@ -738,13 +743,17 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	break;
   }
 
-  /*if ( event == InternalEvent::GenOptCode ) {
-	PrintF("----------Inside log: %d %p %d\n", 
-	  event, shared_addr, func_id);
-	Flush();
-  }*/
-
   msg.Append("\n");
+
+  /*
+  if ( event == InternalEvent::GenOptCode &&
+	add_msg != NULL && strcmp(add_msg, "debug") == 0 ) {
+	PrintF("----------Inside log: code = %p shared = %p func = %p\n", 
+	  new_code, shared_addr, func_id);
+	Flush();
+  }
+  */
+
   msg.WriteToLogFile();
 }
 

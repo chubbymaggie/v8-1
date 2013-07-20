@@ -210,11 +210,11 @@ gen_osr_code(FILE* file)
 static void
 disable_opt(FILE* file)
 {
-  int shared, func, code;
+  int shared, func;
   char opt_buf[128];
 
-  fscanf( file, "%p %d %p %s",
-          &shared, &func, &code, opt_buf );
+  fscanf( file, "%p %d %[^\t\n]",
+          &shared, &func, opt_buf );
 
   FunctionMachine* fsm = 
     (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
@@ -224,11 +224,11 @@ disable_opt(FILE* file)
 static void
 reenable_opt(FILE* file)
 {
-  int shared, func, code;
+  int shared, func;
   char opt_buf[128];
 
-  fscanf( file, "%p %d %p %s",
-          &shared, &func, &code, opt_buf );
+  fscanf( file, "%p %d %[^\t\n]",
+          &shared, &func, opt_buf );
 
   FunctionMachine* fsm = 
     (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);

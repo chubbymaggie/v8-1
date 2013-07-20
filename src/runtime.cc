@@ -8091,13 +8091,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	function->ReplaceCode(new_code);
 	// Perhaps the optimization channel is disabled
 	if ( FLAG_trace_function_internals ) {
-	  LOG(function->GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::OptFailed,
-		  *function,
-		  new_code,
-		  shared, "@5")
-		);
+	  if ( new_code->kind() < Code::STUB ) {
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::OptFailed,
+			*function,
+			new_code,
+			shared, "@5")
+		  );
+	  }
 	}
     return new_code;
   }
@@ -8108,17 +8110,18 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
                                    CLEAR_EXCEPTION)) {
 	// Generate optimized code successfully
 	Code* code = function->code();
-	//PrintF("------>Optimizing code = %p\n", code);
-	//Flush();
-
 	if ( FLAG_trace_function_internals ) {
-	  LOG(function->GetIsolate(),
-		EmitFunctionEvent(
-		Logger::GenOptCode,
-		*function,
-		code,
-		shared)
-	  );
+	  PrintF("------>Optimizing function = %s\n", shared->DebugName()->ToCString());
+	  Flush();
+	  if ( code->kind() < Code::STUB ) {
+		LOG(function->GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::GenOptCode,
+		  *function,
+		  code,
+		  shared)
+		);
+	  }
 	}
 
     return code;
@@ -8251,26 +8254,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NotifyDeoptimized) {
       PrintF("]\n");
     }
     function->ReplaceCode(function->shared()->code());
-
-	if ( FLAG_trace_function_internals ) {
-	  //char buf[20];
-	  //sprintf(buf, "Deopt@%d", deoptimizer->bailout_id_);
-
-	  /*PrintF( "Deopt: %p %p %p %p\n", 
-		function->GetIsolate(), 
-		*function, 
-		function->code(), 
-		function->shared() );
-		*/
-
-	  LOG(function->GetIsolate(),
-			EmitFunctionEvent(
-			Logger::DeoptCode,
-			*function,
-			function->code(),
-			function->shared(), "@-1" )
-		);
-	}
   } else {
     Deoptimizer::DeoptimizeFunction(*function);
   }
@@ -8526,13 +8509,16 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
   }
 
   if ( FLAG_trace_function_internals ) {
-	LOG(Isolate::Current(),
-	  EmitFunctionEvent(
-		(res->value() == -1 ? Logger::OptFailed : Logger::GenOsrCode),
-		*function,
-		function->code(),
-		function->shared(), "@6")
-	);
+	Code* code = function->code();
+	if ( code->kind() < Code::STUB ) {
+	  LOG(function->GetIsolate(),
+		EmitFunctionEvent(
+		  (res->value() == -1 ? Logger::OptFailed : Logger::GenOsrCode),
+		  *function,
+		  code,
+		  function->shared(), "@6")
+	  );
+	}
   }
 
   return res;

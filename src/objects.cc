@@ -57,6 +57,7 @@
 namespace v8 {
 namespace internal {
 
+int JSFunction::id_counter = 0;
 
 MUST_USE_RESULT static MaybeObject* CreateJSValue(JSFunction* constructor,
                                                   Object* value) {
@@ -9345,8 +9346,6 @@ void SharedFunctionInfo::TrimOptimizedCodeMap(int shrink_by) {
   }
 }
 
-//int JSFunction::id_counter = 0;
-
 bool JSFunction::CompileLazy(Handle<JSFunction> function,
                              ClearExceptionFlag flag) {
   bool result = true;
@@ -9360,14 +9359,17 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
   }
 
   if ( FLAG_trace_function_internals ) {
-	LOG(Isolate::Current(),
-	  EmitFunctionEvent(
-		Logger::GenFullCode,
-		*function,
-		function->code(),
-		function->shared()
-	  )
-	);
+	Code* code = function->code();
+	if ( code->kind() < Code::STUB ) {
+	  LOG(function->GetIsolate(),
+		EmitFunctionEvent(
+		  Logger::GenFullCode,
+		  *function,
+		  code,
+		  function->shared()
+		)
+	  );
+	}
   }
 
   return result;
@@ -9383,13 +9385,16 @@ bool JSFunction::CompileOptimized(Handle<JSFunction> function,
   if ( res == false ) {
 	// Something wrong happened during optimization 
 	if ( FLAG_trace_function_internals ) {
-	  LOG(function->GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::OptFailed,
-		  *function,
-		  function->code(),
-		  function->shared(), "@1")
-		);
+	  Code* code = function->code();
+	  if ( code->kind() < Code::STUB ) {
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::OptFailed,
+			*function,
+			code,
+			function->shared(), "@1")
+		  );
+	  }
 	}
   }
 
@@ -9761,13 +9766,15 @@ void SharedFunctionInfo::DisableOptimization(const char* reason) {
     PrintF(", reason: %s]\n", reason);
   }
   if ( FLAG_trace_function_internals ) {
-	LOG(GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::DisableOpt,
-		  NULL,
-		  NULL,
-		  this, reason)
-	  );
+	if ( code()->kind() < Code::STUB ) {
+	  LOG(GetIsolate(),
+			EmitFunctionEvent(
+			Logger::DisableOpt,
+			NULL,
+			NULL,
+			this, reason)
+		);
+	}
   }
 }
 

@@ -315,6 +315,9 @@ int main(int argc, char** argv) {
   // Disable the i18n extension, as it doesn't support being snapshotted yet.
   i::FLAG_enable_i18n = false;
 
+  // We start numbering the functions from 0
+  i::JSFunction::id_counter = 0;
+
   // Print the usage if an error occurs when parsing the command line
   // flags or if the help flag is set.
   int result = i::FlagList::SetFlagsFromCommandLine(&argc, argv, true);

@@ -625,7 +625,6 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
     Handle<SharedFunctionInfo> function_info,
     Handle<Context> context,
     PretenureFlag pretenure) {
-  //static int id_counter = 0;
   Handle<JSFunction> result = BaseNewFunctionFromSharedFunctionInfo(
       function_info,
       MapForNewFunction(isolate(), function_info),
@@ -634,17 +633,18 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
   // Log function create event
   // We log it before any other changes to it
   if ( FLAG_trace_function_internals ) {
+	Code* code = result->code();
 	// Assign a counter to this function
-	//result->set_functionID( id_counter++ );
-	//JSFunction::id_counter++;
+		result->set_functionID( JSFunction::id_counter++ );
+		JSFunction::id_counter++;
 
-	LOG(function_info->GetIsolate(),
-		EmitFunctionEvent(
-		Logger::CreateFunction,
-		*result,
-		result->code(),		  // The code might be a lazy compile stub
-		*function_info)
-	);
+		LOG(isolate(),
+			EmitFunctionEvent(
+			Logger::CreateFunction,
+			*result,
+			code,		  // The code might be a lazy compile stub
+			*function_info)
+		);
   }
 
   if (function_info->ic_age() != isolate()->heap()->global_ic_age()) {

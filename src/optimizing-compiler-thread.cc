@@ -96,7 +96,7 @@ void OptimizingCompilerThread::CompileNext() {
   ScopedLock mark_and_queue(install_mutex_);
   { Heap::RelocationLock relocation_lock(isolate_->heap());
     AllowHandleDereference ahd;
-    optimizing_compiler->info()->closure()->MarkForInstallingRecompiledCode();
+	optimizing_compiler->info()->closure()->MarkForInstallingRecompiledCode();
   }
   output_queue_.Enqueue(optimizing_compiler);
 }
@@ -144,21 +144,36 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
       ScopedLock marked_and_queued(install_mutex_);
       if (!output_queue_.Dequeue(&compiler)) return;
     }
-    Compiler::InstallOptimizedCode(compiler);
 	
-	if ( FLAG_trace_function_internals ) {
-	  Handle<JSFunction> function = compiler->info()->closure();
-	  Handle<Code> code = compiler->info()->code();
-	  //PrintF("------>Parallel optimizing code = %p \n", *code);
-	  Flush();
+	// We have to store a copy of function, because compiler->info() will be destroyed after InstallOptimizedCode
+	Handle<JSFunction> function = compiler->info()->closure();
+	// Generate real code and record in info->code()
+	OptimizingCompiler::Status opt_status = Compiler::InstallOptimizedCode(compiler);
 
-	  LOG(Isolate::Current(),
-		  EmitFunctionEvent(
-		  Logger::GenOptCode,
-		  *function,
-		  *code,
-		  function->shared())
-		);
+	/*
+	PrintF("------>Parallel optimizing compiler = %p\n", compiler);
+	Flush();
+	PrintF("------>Parallel optimizing function = %p\n", function);
+	Flush();
+	*/
+	if ( FLAG_trace_function_internals 
+	  && !function->IsNull() ) {
+	  Code* code = function->code();
+	  /*
+	  PrintF("------>Parallel optimizing code = %p\n", code);
+	  Flush();
+	  PrintF("------>Parallel optimizing status = %p\n", opt_status);
+	  Flush();
+	  */
+	  if ( code->kind() < Code::STUB ) {
+		LOG(isolate_,
+			EmitFunctionEvent(
+			opt_status == OptimizingCompiler::SUCCEEDED ? Logger::GenOptCode : Logger::OptFailed,
+			*function,
+			code,
+			function->shared())
+		  );
+	  }
 	}
   }
 }

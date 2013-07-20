@@ -163,13 +163,16 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   // If the code is not optimizable, don't try OSR.
   if (!shared->code()->optimizable()) {
 	if ( FLAG_trace_function_internals ) {
-	  LOG(function->GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::OptFailed,
-		  function,
-		  shared->code(),
-		  shared, "@2")
-		);
+	  Code* code = shared->code();
+	  if ( code->kind() < Code::STUB ) {
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::OptFailed,
+			function,
+			code,
+			shared, "@2")
+		  );
+	  }
 	}
 	return;
   }
@@ -179,14 +182,17 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   // arguments accesses, which is unsound.  Don't try OSR.
   if (shared->uses_arguments()) {
 	if ( FLAG_trace_function_internals ) {
-	  LOG(function->GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::OptFailed,
-		  function,
-		  shared->code(),
-		  shared,
-		  "UseArguments @3")
-		);
+	  Code* code = shared->code();
+	  if ( code->kind() < Code::STUB ) {
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::OptFailed,
+			function,
+			code,
+			shared,
+			"UseArguments @3")
+		  );
+	  }
 	}
 	return;
   }
@@ -340,14 +346,20 @@ void RuntimeProfiler::OptimizeNow() {
 	  // We track the opt failed status immediately
 	  // because later v8 tries to reenable optimization, which erases the opt disable information
 	  if ( FLAG_trace_function_internals ) {
-		LOG(function->GetIsolate(),
-			EmitFunctionEvent(
-			Logger::OptFailed,
-			function,
-			shared->code(),
-			shared, "@4")
-		  );
+		PrintF("------>optimizeNow exit = %s\n", shared->DebugName()->ToCString());
+		Flush();
+		Code* code = shared->code();
+		if ( code->kind() < Code::STUB ) {
+		  LOG(function->GetIsolate(),
+			  EmitFunctionEvent(
+			  Logger::OptFailed,
+			  function,
+			  code,
+			  shared, "@4")
+			);
+		}
 	  }
+
       if (shared->deopt_count() >= FLAG_max_opt_count) {
         // If optimization was disabled due to many deoptimizations,
         // then check if the function is hot and try to reenable optimization.

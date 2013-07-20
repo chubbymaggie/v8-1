@@ -817,6 +817,37 @@ void Deoptimizer::DoComputeOutputFrames() {
            has_alignment_padding_ ? "with padding" : "no padding",
            ms);
   }
+
+  if ( FLAG_trace_function_internals &&
+	function_ != NULL &&
+	function_->IsJSFunction() ) {
+	  // function_ may be a SMI, which indicates a builtin function
+	  SharedFunctionInfo* shared = function_->shared();
+	  Code* code = shared->code();
+	  if ( code->kind() < Code::STUB ) {
+		char buf[20];
+		sprintf(buf, "@%d", bailout_id_);
+		/*
+		PrintFunctionName();
+		PrintF("\n");
+		Flush();
+		PrintF( "Deopt: %p %p %p %p\n", 
+		  isolate_, 
+		  function_, 
+		  compiled_code_,
+		  function_->shared() );
+		Flush();
+		*/
+		
+		LOG(isolate_,
+			EmitFunctionEvent(
+			  Logger::DeoptCode,
+			  function_,
+			  code,
+			  shared, buf )
+		  );
+	  }
+  }
 }
 
 

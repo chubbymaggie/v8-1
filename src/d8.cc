@@ -1478,6 +1478,9 @@ bool Shell::SetOptions(int argc, char* argv[]) {
 
 
 int Shell::RunMain(Isolate* isolate, int argc, char* argv[]) {
+  // We start numbering the functions from 5000
+  i::JSFunction::id_counter = 5000;
+
 #ifndef V8_SHARED
   i::List<i::Thread*> threads(1);
   if (options.parallel_files != NULL) {

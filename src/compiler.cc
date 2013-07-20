@@ -402,13 +402,17 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
 	  // The newly compiled code may not be inserted into sharedinfo
 	  // Therefore, we use shared->code() 
 	  if ( FLAG_trace_function_internals ) {
-		LOG(shared->GetIsolate(),
-		  EmitFunctionEvent(
-		  Logger::GenFullWithDeopt,
-		  *(info()->closure()),
-		  shared->code(),
-		  *shared)
-		);
+		Code*  code = shared->code();
+		if ( code->kind() < Code::STUB ) {
+		  JSFunction* function = *(info()->closure());
+		  LOG(isolate(),
+			EmitFunctionEvent(
+			Logger::GenFullWithDeopt,
+			function,
+			code,
+			*shared)
+		  );
+		}
 	  }
     }
     if (FLAG_hydrogen_stats) {
@@ -1041,7 +1045,7 @@ void Compiler::RecompileParallel(Handle<JSFunction> closure) {
 }
 
 
-void Compiler::InstallOptimizedCode(OptimizingCompiler* optimizing_compiler) {
+OptimizingCompiler::Status Compiler::InstallOptimizedCode(OptimizingCompiler* optimizing_compiler) {
   SmartPointer<CompilationInfo> info(optimizing_compiler->info());
   // The function may have already been optimized by OSR.  Simply continue.
   // Except when OSR already disabled optimization for some reason.
@@ -1054,7 +1058,7 @@ void Compiler::InstallOptimizedCode(OptimizingCompiler* optimizing_compiler) {
       PrintF(" as it has been disabled.\n");
     }
     ASSERT(!info->closure()->IsMarkedForInstallingRecompiledCode());
-    return;
+	return OptimizingCompiler::FAILED;
   }
 
   Isolate* isolate = info->isolate();
@@ -1101,6 +1105,8 @@ void Compiler::InstallOptimizedCode(OptimizingCompiler* optimizing_compiler) {
   // profiler ticks to prevent too soon re-opt after a deopt.
   info->shared_info()->code()->set_profiler_ticks(0);
   ASSERT(!info->closure()->IsMarkedForInstallingRecompiledCode());
+
+  return status;
 }
 
 
