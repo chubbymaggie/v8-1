@@ -6724,7 +6724,7 @@ class JSFunction: public JSObject {
   // Retrieve the native context from a function's literal array.
   static Context* NativeContextFromLiterals(FixedArray* literals);
 
-  DECL_LONG_ACCESSORS(functionID);
+  DECL_LONG_ACCESSORS(functionID)
 
 #ifdef DEBUG
   bool FunctionsInFunctionListShareSameCode() {
