@@ -145,8 +145,11 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
       if (!output_queue_.Dequeue(&compiler)) return;
     }
 	
-	// We have to store a copy of function, because compiler->info() will be destroyed after InstallOptimizedCode
-	Handle<JSFunction> function = compiler->info()->closure();
+	/*
+	  There is a very deep trick that InstallOptimizedCode releases memory for compilationInfo and OptimizingCompiler.
+	  The is because OptimizingCompiler is allocated in the zone of the compilationInfo and the compilationInfo is automatically released.
+	*/
+	//JSFunction* function = *(compiler->info()->closure());
 	// Generate real code and record in info->code()
 	OptimizingCompiler::Status opt_status = Compiler::InstallOptimizedCode(compiler);
 
@@ -156,25 +159,6 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
 	PrintF("------>Parallel optimizing function = %p\n", function);
 	Flush();
 	*/
-	if ( FLAG_trace_function_internals 
-	  && !function->IsNull() ) {
-	  Code* code = function->code();
-	  /*
-	  PrintF("------>Parallel optimizing code = %p\n", code);
-	  Flush();
-	  PrintF("------>Parallel optimizing status = %p\n", opt_status);
-	  Flush();
-	  */
-	  if ( code->kind() < Code::STUB ) {
-		LOG(isolate_,
-			EmitFunctionEvent(
-			opt_status == OptimizingCompiler::SUCCEEDED ? Logger::GenOptCode : Logger::OptFailed,
-			*function,
-			code,
-			function->shared())
-		  );
-	  }
-	}
   }
 }
 

@@ -8160,7 +8160,29 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InstallRecompiledCode) {
   CONVERT_ARG_HANDLE_CHECKED(JSFunction, function, 0);
   ASSERT(V8::UseCrankshaft() && FLAG_parallel_recompilation);
   isolate->optimizing_compiler_thread()->InstallOptimizedFunctions();
-  return function->code();
+
+  Code* code = function->code();
+  if ( FLAG_trace_function_internals ) {
+	  /*
+	  PrintF("------>Parallel optimizing code = %p\n", code);
+	  Flush();
+	  PrintF("------>Parallel optimizing status = %p\n", opt_status);
+	  Flush();
+	  */
+	  if ( code->kind() < Code::STUB ) {
+		SharedFunctionInfo* shared = function->shared();
+		bool opt_failed = (shared->code() == code ? true : false);
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			opt_failed == true ?  Logger::OptFailed : Logger::GenOptCode,
+			*function,
+			code,
+			shared)
+		  );
+	  }
+  }
+
+  return code;
 }
 
 
