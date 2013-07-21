@@ -116,6 +116,7 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <None Include="ClassDiagram.cd" />
     <None Include="v8.gyp" />
   </ItemGroup>
   <ItemGroup>

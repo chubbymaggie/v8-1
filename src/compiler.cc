@@ -402,7 +402,7 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
 	  // The newly compiled code may not be inserted into sharedinfo
 	  // Therefore, we use shared->code() 
 	  if ( FLAG_trace_function_internals ) {
-		Code*  code = shared->code();
+		Code* code = shared->code();
 		if ( code->kind() < Code::STUB ) {
 		  JSFunction* function = *(info()->closure());
 		  LOG(isolate(),

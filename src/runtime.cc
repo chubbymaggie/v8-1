@@ -8111,8 +8111,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	// Generate optimized code successfully
 	Code* code = function->code();
 	if ( FLAG_trace_function_internals ) {
-	  PrintF("------>Optimizing function = %s\n", shared->DebugName()->ToCString());
-	  Flush();
+	  //PrintF("------>Optimizing function = %s\n", shared->DebugName()->ToCString());
+	  //Flush();
 	  if ( code->kind() < Code::STUB ) {
 		LOG(function->GetIsolate(),
 		  EmitFunctionEvent(

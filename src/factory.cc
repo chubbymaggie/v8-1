@@ -636,7 +636,6 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
 	Code* code = result->code();
 	// Assign a counter to this function
 		result->set_functionID( JSFunction::id_counter++ );
-		JSFunction::id_counter++;
 
 		LOG(isolate(),
 			EmitFunctionEvent(

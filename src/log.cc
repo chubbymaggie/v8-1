@@ -676,20 +676,22 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   switch(event) {
   case CreateFunction:
 	{
-	  // Compute the position of this function in source code
-	  
-	  Handle<Script> script(Script::cast(shared->script()));
-	  int line_num = GetScriptLineNumber( script, 
-		  								  shared->start_position()) + 1;
+	  // Record the installed code address
+	  msg.Append(" %p", new_code);
 
 	  // Inspect the name of this function
 	  String* debug_name = shared->DebugName();
-	  char name_buf[32];
-	  sprintf(name_buf, "%s@%d", 
-				((debug_name->length() == 0) ? "Closure" : *(debug_name->ToCString())),
-				line_num);
-	  
-	  msg.Append(" %p %s", new_code, name_buf);
+	  if ( debug_name->length() == 0 )
+		msg.Append("Closure");
+	  else {
+		msg.Append("%s", *(debug_name->ToCString()));
+	  }
+
+	  // Compute the position of this function in source code
+	  Handle<Script> script(Script::cast(shared->script()));
+	  int line_num = GetScriptLineNumber( script, 
+		  								  shared->start_position()) + 1;
+	  msg.Append("@%d", line_num);
 	}
 	break;
 

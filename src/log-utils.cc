@@ -312,11 +312,7 @@ void LogMessageBuilder::AppendStringPart(const char* str, int len) {
 
 void LogMessageBuilder::WriteToLogFile() {
   ASSERT(pos_ <= Log::kMessageBufferSize);
-  //PrintF( "~~~~~~Ready, before writing the buffer.\n" );
-  Flush();
   const int written = log_->WriteToFile(log_->message_buffer_, pos_);
-  //PrintF( "~~~~~~Congradulations, after writing the buffer.\n" );
-  Flush();
   if (written != pos_) {
     log_->stop();
     log_->logger_->LogFailure();

@@ -346,8 +346,8 @@ void RuntimeProfiler::OptimizeNow() {
 	  // We track the opt failed status immediately
 	  // because later v8 tries to reenable optimization, which erases the opt disable information
 	  if ( FLAG_trace_function_internals ) {
-		PrintF("------>optimizeNow exit = %s\n", shared->DebugName()->ToCString());
-		Flush();
+		//PrintF("------>optimizeNow exit = %s\n", shared->DebugName()->ToCString());
+		//Flush();
 		Code* code = shared->code();
 		if ( code->kind() < Code::STUB ) {
 		  LOG(function->GetIsolate(),
