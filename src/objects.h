@@ -845,6 +845,10 @@ enum CompareResult {
   inline int name();													\
   inline void set_##name(int value);									\
 
+#define DECL_LONG_ACCESSORS(name)                                        \
+  inline long name();													\
+  inline void set_##name(long value);									\
+
 class AccessorPair;
 class DictionaryElementsAccessor;
 class ElementsAccessor;
@@ -6720,7 +6724,7 @@ class JSFunction: public JSObject {
   // Retrieve the native context from a function's literal array.
   static Context* NativeContextFromLiterals(FixedArray* literals);
 
-  DECL_INT_ACCESSORS(functionID);
+  DECL_LONG_ACCESSORS(functionID);
 
 #ifdef DEBUG
   bool FunctionsInFunctionListShareSameCode() {
@@ -6746,7 +6750,7 @@ class JSFunction: public JSObject {
   static const int kContextOffset = kSharedFunctionInfoOffset + kPointerSize;
   static const int kLiteralsOffset = kContextOffset + kPointerSize;
   static const int kFunctionID = kLiteralsOffset + kPointerSize;
-  static const int kNonWeakFieldsEndOffset = kFunctionID + kIntSize;
+  static const int kNonWeakFieldsEndOffset = kFunctionID + kLongSize;
   static const int kNextFunctionLinkOffset = kNonWeakFieldsEndOffset;
   static const int kSize = kNextFunctionLinkOffset + kPointerSize;
 

@@ -89,6 +89,9 @@ PropertyDetails PropertyDetails::AsDeleted() {
   int holder::name() { return READ_INT_FIELD(this, offset); }           \
   void holder::set_##name(int value) { WRITE_INT_FIELD(this, offset, value); }
 
+#define LONG_ACCESSORS(holder, name, offset)                             \
+  long holder::name() { return READ_LONG_FIELD(this, offset); }           \
+  void holder::set_##name(long value) { WRITE_LONG_FIELD(this, offset, value); }
 
 #define ACCESSORS(holder, name, type, offset)                           \
   type* holder::name() { return type::cast(READ_FIELD(this, offset)); } \
@@ -1009,6 +1012,12 @@ MaybeObject* Object::GetProperty(Name* key, PropertyAttributes* attributes) {
 
 #define WRITE_INT_FIELD(p, offset, value) \
   (*reinterpret_cast<int*>(FIELD_ADDR(p, offset)) = value)
+
+#define READ_LONG_FIELD(p, offset) \
+  (*reinterpret_cast<long*>(FIELD_ADDR(p, offset)))
+
+#define WRITE_LONG_FIELD(p, offset, value) \
+  (*reinterpret_cast<long*>(FIELD_ADDR(p, offset)) = value)
 
 #define READ_INTPTR_FIELD(p, offset) \
   (*reinterpret_cast<intptr_t*>(FIELD_ADDR(p, offset)))
@@ -4376,7 +4385,7 @@ ACCESSORS(Map, constructor, Object, kConstructorOffset)
 
 ACCESSORS(JSFunction, shared, SharedFunctionInfo, kSharedFunctionInfoOffset)
 ACCESSORS(JSFunction, literals_or_bindings, FixedArray, kLiteralsOffset)
-INT_ACCESSORS(JSFunction, functionID, kFunctionID)
+LONG_ACCESSORS(JSFunction, functionID, kFunctionID)
 ACCESSORS(JSFunction, next_function_link, Object, kNextFunctionLinkOffset)
 
 ACCESSORS(GlobalObject, builtins, JSBuiltinsObject, kBuiltinsOffset)
