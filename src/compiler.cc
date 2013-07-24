@@ -403,16 +403,14 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
 	  // Therefore, we use shared->code() 
 	  if ( FLAG_trace_function_internals ) {
 		Code* code = shared->code();
-		if ( code->kind() < Code::STUB ) {
-		  JSFunction* function = *(info()->closure());
+		JSFunction* function = *(info()->closure());
 		  LOG(isolate(),
 			EmitFunctionEvent(
 			Logger::GenFullWithDeopt,
 			function,
 			code,
 			*shared)
-		  );
-		}
+		 );
 	  }
     }
     if (FLAG_hydrogen_stats) {
@@ -859,7 +857,21 @@ static bool InstallFullCode(CompilationInfo* info) {
         !Isolate::Current()->DebuggerHasBreakPoints()) {
       CompilationInfoWithZone optimized(function);
       optimized.SetOptimizing(BailoutId::None());
-      return Compiler::CompileLazy(&optimized);
+      bool res = Compiler::CompileLazy(&optimized);
+
+	  // A mysterious place that enables optimization
+	  if ( FLAG_trace_function_internals ) {
+		Code* code = function->code();
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::GenOptCode,
+			*function,
+			code,
+			*shared)
+		  );
+	  }
+
+	  return res;
     }
   }
   return true;
@@ -1002,6 +1014,20 @@ void Compiler::RecompileParallel(Handle<JSFunction> closure) {
     CompilationHandleScope handle_scope(*info);
 
     if (InstallCodeFromOptimizedCodeMap(*info)) {
+	  // Eearly exit for parallel optimization path
+	  // We must capture it
+	  if ( FLAG_trace_function_internals ) {
+		Code* code = closure->code();
+		SharedFunctionInfo* shared = closure->shared();
+		LOG(closure->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::GenOptCode,
+			*closure,
+			code,
+			shared)
+		  );
+	  }
+
       return;
     }
 

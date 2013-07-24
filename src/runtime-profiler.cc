@@ -164,15 +164,13 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   if (!shared->code()->optimizable()) {
 	if ( FLAG_trace_function_internals ) {
 	  Code* code = shared->code();
-	  if ( code->kind() < Code::STUB ) {
-		LOG(function->GetIsolate(),
+	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
 			Logger::OptFailed,
 			function,
 			code,
 			shared, "@2")
 		  );
-	  }
 	}
 	return;
   }
@@ -183,8 +181,7 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   if (shared->uses_arguments()) {
 	if ( FLAG_trace_function_internals ) {
 	  Code* code = shared->code();
-	  if ( code->kind() < Code::STUB ) {
-		LOG(function->GetIsolate(),
+	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
 			Logger::OptFailed,
 			function,
@@ -192,7 +189,6 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
 			shared,
 			"UseArguments @3")
 		  );
-	  }
 	}
 	return;
   }
@@ -349,15 +345,13 @@ void RuntimeProfiler::OptimizeNow() {
 		//PrintF("------>optimizeNow exit = %s\n", shared->DebugName()->ToCString());
 		//Flush();
 		Code* code = shared->code();
-		if ( code->kind() < Code::STUB ) {
-		  LOG(function->GetIsolate(),
+		LOG(function->GetIsolate(),
 			  EmitFunctionEvent(
 			  Logger::OptFailed,
 			  function,
 			  code,
 			  shared, "@4")
 			);
-		}
 	  }
 
       if (shared->deopt_count() >= FLAG_max_opt_count) {

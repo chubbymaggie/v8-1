@@ -48,6 +48,7 @@
 #include "factory.h"
 #include "incremental-marking.h"
 #include "transitions-inl.h"
+#include "log.h"
 
 namespace v8 {
 namespace internal {
@@ -4385,7 +4386,7 @@ ACCESSORS(Map, constructor, Object, kConstructorOffset)
 
 ACCESSORS(JSFunction, shared, SharedFunctionInfo, kSharedFunctionInfoOffset)
 ACCESSORS(JSFunction, literals_or_bindings, FixedArray, kLiteralsOffset)
-LONG_ACCESSORS(JSFunction, functionID, kFunctionID)
+//LONG_ACCESSORS(JSFunction, functionID, kFunctionID)
 ACCESSORS(JSFunction, next_function_link, Object, kNextFunctionLinkOffset)
 
 ACCESSORS(GlobalObject, builtins, JSBuiltinsObject, kBuiltinsOffset)
@@ -4869,15 +4870,13 @@ void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
 
   if ( FLAG_trace_function_internals ) {
 	Code* code = this->code();
-	if ( code->kind() < Code::STUB ) {
-	  LOG( GetIsolate(),
+	LOG( GetIsolate(),
 		  EmitFunctionEvent(
 			Logger::ReenableOpt,
 			NULL,
 			NULL,
 			this, reason)
 		  );
-	} 
   }
 }
 
@@ -4933,6 +4932,18 @@ Code* JSFunction::code() {
 
 void JSFunction::set_code(Code* value) {
   ASSERT(!HEAP->InNewSpace(value));
+
+ // if ( FLAG_trace_function_internals &&
+	//	code() == NULL ) {
+	//// Perhaps this is the first time installing code
+	//LOG( GetIsolate(),
+	//	  EmitFunctionEvent(
+	//		Logger::InstallCode,
+	//		this, value, shared()
+	//	  )
+	//);
+ // }
+
   Address entry = value->entry();
   WRITE_INTPTR_FIELD(this, kCodeEntryOffset, reinterpret_cast<intptr_t>(entry));
   GetHeap()->incremental_marking()->RecordWriteOfCodeEntry(

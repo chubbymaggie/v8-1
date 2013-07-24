@@ -2002,6 +2002,12 @@ class ScavengingVisitor : public StaticVisitorBase {
 
     // Set the forwarding address.
     source->set_map_word(MapWord::FromForwardingAddress(target));
+	
+	// We also record movement event
+	if ( FLAG_trace_function_internals ) {
+	  LOG( heap->isolate(),
+			EmitGCMoveEvent(source, target));
+	}
 
     if (logging_and_profiling_mode == LOGGING_AND_PROFILING_ENABLED) {
       // Update NewSpace stats if necessary.

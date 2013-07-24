@@ -8091,15 +8091,13 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	function->ReplaceCode(new_code);
 	// Perhaps the optimization channel is disabled
 	if ( FLAG_trace_function_internals ) {
-	  if ( new_code->kind() < Code::STUB ) {
-		LOG(function->GetIsolate(),
+	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
 			Logger::OptFailed,
 			*function,
 			new_code,
 			shared, "@5")
 		  );
-	  }
 	}
     return new_code;
   }
@@ -8113,15 +8111,13 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	if ( FLAG_trace_function_internals ) {
 	  //PrintF("------>Optimizing function = %s\n", shared->DebugName()->ToCString());
 	  //Flush();
-	  if ( code->kind() < Code::STUB ) {
-		LOG(function->GetIsolate(),
+	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
 		  Logger::GenOptCode,
 		  *function,
 		  code,
 		  shared)
 		);
-	  }
 	}
 
     return code;
@@ -8163,23 +8159,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InstallRecompiledCode) {
 
   Code* code = function->code();
   if ( FLAG_trace_function_internals ) {
-	  /*
-	  PrintF("------>Parallel optimizing code = %p\n", code);
-	  Flush();
-	  PrintF("------>Parallel optimizing status = %p\n", opt_status);
-	  Flush();
-	  */
-	  if ( code->kind() < Code::STUB ) {
-		SharedFunctionInfo* shared = function->shared();
-		bool opt_failed = (shared->code() == code ? true : false);
-		LOG(function->GetIsolate(),
-			EmitFunctionEvent(
-			opt_failed == true ?  Logger::OptFailed : Logger::GenOptCode,
-			*function,
-			code,
-			shared)
-		  );
-	  }
+	SharedFunctionInfo* shared = function->shared();
+	bool opt_failed = (shared->code() == code ? true : false);
+	LOG(function->GetIsolate(),
+		EmitFunctionEvent(
+		opt_failed == true ?  Logger::OptFailed : Logger::GenOptCode,
+		*function,
+		code,
+		shared)
+	  );
   }
 
   return code;
@@ -8532,15 +8520,13 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
 
   if ( FLAG_trace_function_internals ) {
 	Code* code = function->code();
-	if ( code->kind() < Code::STUB ) {
-	  LOG(function->GetIsolate(),
+	LOG(function->GetIsolate(),
 		EmitFunctionEvent(
 		  (res->value() == -1 ? Logger::OptFailed : Logger::GenOsrCode),
 		  *function,
 		  code,
 		  function->shared(), "@6")
 	  );
-	}
   }
 
   return res;

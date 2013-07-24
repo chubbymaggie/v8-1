@@ -6724,7 +6724,7 @@ class JSFunction: public JSObject {
   // Retrieve the native context from a function's literal array.
   static Context* NativeContextFromLiterals(FixedArray* literals);
 
-  DECL_LONG_ACCESSORS(functionID)
+  //DECL_LONG_ACCESSORS(functionID)
 
 #ifdef DEBUG
   bool FunctionsInFunctionListShareSameCode() {
@@ -6749,8 +6749,8 @@ class JSFunction: public JSObject {
       kPrototypeOrInitialMapOffset + kPointerSize;
   static const int kContextOffset = kSharedFunctionInfoOffset + kPointerSize;
   static const int kLiteralsOffset = kContextOffset + kPointerSize;
-  static const int kFunctionID = kLiteralsOffset + kPointerSize;
-  static const int kNonWeakFieldsEndOffset = kFunctionID + kLongSize;
+  //static const int kFunctionID = kLiteralsOffset + kPointerSize;
+  static const int kNonWeakFieldsEndOffset = kLiteralsOffset + kPointerSize;
   static const int kNextFunctionLinkOffset = kNonWeakFieldsEndOffset;
   static const int kSize = kNextFunctionLinkOffset + kPointerSize;
 
@@ -6764,6 +6764,7 @@ class JSFunction: public JSObject {
   static const int kBoundArgumentsStartIndex = 2;
   
   static int id_counter;
+  static const int snapshot_limit = 50000;
 
  private:
   DISALLOW_IMPLICIT_CONSTRUCTORS(JSFunction);

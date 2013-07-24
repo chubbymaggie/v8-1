@@ -4,15 +4,19 @@
 #define EVENTS_H
 
 
-#define EVENTS_LIST(V)					\
-  V(CreateObject,         create_object)		\
-  V(CreateFunction,       create_function)		\
-  V(ChangeType,           change_type)			\
-  V(ExpandArray,          expand_array)			\
-  V(MakeHole,             make_hole)			\
-  V(ToSlowMode,           to_slow_mode)			\
-  V(ArrayOpsStoreChange,  array_ops_store_change)	\
-  V(ArrayOpsPure,         array_ops_pure)		\
+#define EVENTS_LIST(V)							\
+  V(CreateObject,         create_object)				\
+  V(CreateFunction,       create_function)				\
+  V(GCMoveFunction,       gc_move_function)				\
+  V(GCMoveShared,         gc_move_shared)				\
+  V(GCMoveCode,           gc_move_code)					\
+  V(ChangeType,           change_type)					\
+  V(ExpandArray,          expand_array)					\
+  V(MakeHole,             make_hole)					\
+  V(ToSlowMode,           to_slow_mode)					\
+  V(ArrayOpsStoreChange,  array_ops_store_change)			\
+  V(ArrayOpsPure,         array_ops_pure)				\
+  V(InstallCode,          install_code)					\
   V(GenFullCode,          gen_full_code)				\
   V(GenFullWithDeopt,     gen_full_deopt)				\
   V(GenOptCode,           gen_opt_code)					\

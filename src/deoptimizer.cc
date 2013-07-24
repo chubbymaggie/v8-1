@@ -480,6 +480,27 @@ void Deoptimizer::HandleWeakDeoptimizedCode(v8::Isolate* isolate,
 
 void Deoptimizer::ComputeOutputFrames(Deoptimizer* deoptimizer) {
   deoptimizer->DoComputeOutputFrames();
+
+  // At this place, we can capture both regular and OSR deoptmization
+  JSFunction* function = deoptimizer->function_;
+  if ( FLAG_trace_function_internals &&
+//	function_ != NULL &&
+	function->IsJSFunction() ) {
+	  // function_ may be a SMI, which indicates a builtin function
+	  SharedFunctionInfo* shared = function->shared();
+	  Code* code = shared->code();
+	  char buf[48];
+	  sprintf(buf, "%s@%d", 
+		MessageFor(deoptimizer->bailout_type_),
+		deoptimizer->bailout_id_);
+	  LOG(deoptimizer->isolate_,
+		  EmitFunctionEvent(
+			Logger::DeoptCode,
+			function,
+			code,
+			shared, buf )
+		);
+  }
 }
 
 
@@ -816,37 +837,6 @@ void Deoptimizer::DoComputeOutputFrames() {
                    output_[index]->GetState()->value())),
            has_alignment_padding_ ? "with padding" : "no padding",
            ms);
-  }
-
-  if ( FLAG_trace_function_internals &&
-	function_ != NULL &&
-	function_->IsJSFunction() ) {
-	  // function_ may be a SMI, which indicates a builtin function
-	  SharedFunctionInfo* shared = function_->shared();
-	  Code* code = shared->code();
-	  if ( code->kind() < Code::STUB ) {
-		char buf[20];
-		sprintf(buf, "@%d", bailout_id_);
-		/*
-		PrintFunctionName();
-		PrintF("\n");
-		Flush();
-		PrintF( "Deopt: %p %p %p %p\n", 
-		  isolate_, 
-		  function_, 
-		  compiled_code_,
-		  function_->shared() );
-		Flush();
-		*/
-		
-		LOG(isolate_,
-			EmitFunctionEvent(
-			  Logger::DeoptCode,
-			  function_,
-			  code,
-			  shared, buf )
-		  );
-	  }
   }
 }
 

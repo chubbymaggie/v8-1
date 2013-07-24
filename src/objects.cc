@@ -9358,18 +9358,17 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
     ASSERT(!result || function->is_compiled());
   }
 
+  // First time generate full code for this function
   if ( FLAG_trace_function_internals ) {
 	Code* code = function->code();
-	if ( code->kind() < Code::STUB ) {
-	  LOG(function->GetIsolate(),
+	LOG(function->GetIsolate(),
 		EmitFunctionEvent(
 		  Logger::GenFullCode,
 		  *function,
 		  code,
 		  function->shared()
 		)
-	  );
-	}
+	 );
   }
 
   return result;
@@ -9382,21 +9381,19 @@ bool JSFunction::CompileOptimized(Handle<JSFunction> function,
   CompilationInfoWithZone info(function);
   info.SetOptimizing(osr_ast_id);
   bool res = CompileLazyHelper(&info, flag);
-  if ( res == false ) {
-	// Something wrong happened during optimization 
-	if ( FLAG_trace_function_internals ) {
-	  Code* code = function->code();
-	  if ( code->kind() < Code::STUB ) {
-		LOG(function->GetIsolate(),
-			EmitFunctionEvent(
-			Logger::OptFailed,
-			*function,
-			code,
-			function->shared(), "@1")
-		  );
-	  }
-	}
-  }
+ // if ( res == false ) {
+	//// Something wrong happened during optimization 
+	//if ( FLAG_trace_function_internals ) {
+	//  Code* code = function->code();
+	//  LOG(function->GetIsolate(),
+	//		EmitFunctionEvent(
+	//		Logger::OptFailed,
+	//		*function,
+	//		code,
+	//		function->shared(), "@1")
+	//	  );
+	//}
+ // }
 
   return res;
 }

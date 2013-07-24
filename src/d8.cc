@@ -1478,8 +1478,8 @@ bool Shell::SetOptions(int argc, char* argv[]) {
 
 
 int Shell::RunMain(Isolate* isolate, int argc, char* argv[]) {
-  // We start numbering the functions from 5000
-  i::JSFunction::id_counter = 5000;
+  // We use this counter to distinguish the snapshot functions and immediate functions
+  i::JSFunction::id_counter = i::JSFunction::snapshot_limit;
 
 #ifndef V8_SHARED
   i::List<i::Thread*> threads(1);

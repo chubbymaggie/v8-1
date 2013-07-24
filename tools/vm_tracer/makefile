@@ -1,5 +1,5 @@
 CC=g++
-CFlags= -g -std=c++0x
+CFlags= -O2 -std=c++0x
 
 .PHONY: all install clean
 .DEFAULT: all

@@ -333,13 +333,17 @@ class Logger {
   #define EVENTS_LIST(V)                                  \
 	V(CreateObject,         create_object)                \
 	V(CreateFunction,       create_function)              \
+	V(GCMoveFunction,		gc_move_function)			  \
+	V(GCMoveShared,			gc_move_shared)				  \
+	V(GCMoveCode,			gc_move_code)	  			  \
 	V(ChangeType,           change_type)                  \
 	V(ExpandArray,          expand_array)                 \
 	V(MakeHole,             make_hole)                    \
 	V(ToSlowMode,           to_slow)                      \
 	V(ArrayOpsStoreChange,  array_ops_store_change)       \
 	V(ArrayOpsPure,         array_ops_pure)               \
-	V(GenFullCode,			gen_full_code)               \
+	V(InstallCode,			install_code)				  \
+	V(GenFullCode,			gen_full_code)			     \
 	V(GenFullWithDeopt,		gen_full_deopt)				  \
 	V(GenOptCode,           gen_opt_code)                 \
 	V(GenOsrCode,           gen_osr_code)				  \
@@ -360,6 +364,8 @@ class Logger {
   // sometimes, code != func->code(), func == NULL (hence func->shared() is invalid)
   void EmitFunctionEvent(InternalEvent event, JSFunction* func,
 				Code* code, SharedFunctionInfo* shared, const char* add_msg = NULL);
+
+  void EmitGCMoveEvent(HeapObject* from, HeapObject* to);
 
   // Log an event reported from generated code
   void LogRuntime(Vector<const char> format, JSArray* args);

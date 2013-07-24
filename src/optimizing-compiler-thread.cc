@@ -152,13 +152,6 @@ void OptimizingCompilerThread::InstallOptimizedFunctions() {
 	//JSFunction* function = *(compiler->info()->closure());
 	// Generate real code and record in info->code()
 	Compiler::InstallOptimizedCode(compiler);
-
-	/*
-	PrintF("------>Parallel optimizing compiler = %p\n", compiler);
-	Flush();
-	PrintF("------>Parallel optimizing function = %p\n", function);
-	Flush();
-	*/
   }
 }
 

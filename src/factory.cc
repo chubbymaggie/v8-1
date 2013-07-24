@@ -634,16 +634,13 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
   // We log it before any other changes to it
   if ( FLAG_trace_function_internals ) {
 	Code* code = result->code();
-	// Assign a counter to this function
-		result->set_functionID( JSFunction::id_counter++ );
-
-		LOG(isolate(),
-			EmitFunctionEvent(
-			Logger::CreateFunction,
-			*result,
-			code,		  // The code might be a lazy compile stub
-			*function_info)
-		);
+	LOG(isolate(),
+		EmitFunctionEvent(
+		Logger::CreateFunction,
+		*result,
+		code,		  // The code might be a lazy compile stub
+		*function_info)
+	);
   }
 
   if (function_info->ic_age() != isolate()->heap()->global_ic_age()) {
@@ -942,6 +939,7 @@ Handle<JSFunction> Factory::NewFunctionWithPrototype(Handle<String> name,
   }
 
   SetPrototypeProperty(function, prototype);
+
   return function;
 }
 
@@ -1306,6 +1304,18 @@ Handle<JSFunction> Factory::NewFunction(Handle<String> name,
                                         Handle<Object> prototype) {
   Handle<JSFunction> fun = NewFunctionHelper(name, prototype);
   fun->set_context(isolate()->context()->native_context());
+
+  if ( FLAG_trace_function_internals ) {
+	Code* code = fun->code();
+	LOG(isolate(),
+		EmitFunctionEvent(
+		Logger::CreateFunction,
+		*fun,
+		code,			  // might be null
+		fun->shared())
+	);
+  }
+
   return fun;
 }
 
@@ -1332,6 +1342,18 @@ Handle<JSFunction> Factory::NewFunctionWithoutPrototype(
   Handle<JSFunction> fun =
       NewFunctionWithoutPrototypeHelper(name, language_mode);
   fun->set_context(isolate()->context()->native_context());
+
+  if ( FLAG_trace_function_internals ) {
+	Code* code = fun->code();
+	LOG(isolate(),
+		EmitFunctionEvent(
+		Logger::CreateFunction,
+		*fun,
+		code,			  // might be null
+		fun->shared())
+	);
+  }
+
   return fun;
 }
 

@@ -651,15 +651,14 @@ void Logger::CodeDeoptEvent(Code* code) {
 void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 				Code* code, SharedFunctionInfo* shared, const char* add_msg) {
   if (!log_->IsEnabled()) return;
-  LogMessageBuilder msg(this);
-
-  // Format the input parameters
-  int func_id = -1;
-  if ( func != NULL ) {
-	func_id = func->functionID();
-	if ( func_id < 5000 )		// A snapshot function
+  if ( JSFunction::id_counter < JSFunction::snapshot_limit )		// A snapshot function
 	  return;
-  }
+
+  LogMessageBuilder msg(this);
+  
+  // Format the input parameters
+  Address func_addr = NULL;
+  if ( func != NULL ) func_addr = func->address();
 
   Address new_code = NULL;
   if ( code != NULL ) new_code = code->address();
@@ -667,10 +666,10 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   Address shared_addr = NULL;
   if ( shared != NULL ) shared_addr = shared->address();
 
-  msg.Append("%d %p %d", 
+  msg.Append("%d %p %p", 
 	  event,
 	  shared_addr,
-	  func_id);
+	  func_addr);
 
   // Followed are handlers for different event types
   switch(event) {
@@ -680,21 +679,30 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	  msg.Append(" %p", new_code);
 
 	  // Inspect the name of this function
-	  String* debug_name = shared->DebugName();
-	  if ( debug_name->length() == 0 )
-		msg.Append("Closure");
+	  String* debug_name = NULL;
+	  if ( shared != NULL ) debug_name = shared->DebugName();
+	  if ( debug_name == NULL || 
+			debug_name->length() == 0 )
+		msg.Append(" Closure");
 	  else {
-		msg.Append("%s", *(debug_name->ToCString()));
+		msg.Append(" %s", *(debug_name->ToCString()));
 	  }
 
 	  // Compute the position of this function in source code
-	  Handle<Script> script(Script::cast(shared->script()));
-	  int line_num = GetScriptLineNumber( script, 
-		  								  shared->start_position()) + 1;
+	  int line_num = -1;
+	  if ( shared != NULL ) {
+		Object* maybe_script = shared->script();
+		if ( maybe_script->IsScript() ) {
+		  Handle<Script> script(Script::cast(maybe_script));
+		  line_num = GetScriptLineNumber( script, 
+		  									shared->start_position()) + 1;
+		}
+	  }
 	  msg.Append("@%d", line_num);
 	}
 	break;
 
+  case InstallCode:
   case GenFullCode:
 	msg.Append(" %p", new_code);
 	break;
@@ -755,6 +763,36 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	Flush();
   }
   */
+
+  msg.WriteToLogFile();
+}
+
+void Logger::EmitGCMoveEvent(HeapObject* from, HeapObject* to)
+{
+  if (!log_->IsEnabled()) return;
+
+  InternalEvent event;
+
+  if ( to->IsJSFunction() ) {
+	//if ( JSFunction::id_counter < JSFunction::snapshot_limit )		// A snapshot function
+	//  return;
+	event = GCMoveFunction;
+  }
+  else if ( to->IsSharedFunctionInfo() ) {
+	event = GCMoveShared;
+  }
+  else if ( to->IsCode() ) {
+	event = GCMoveCode;
+  }
+  else
+	return;
+
+  LogMessageBuilder msg(this);
+
+  msg.Append("%d %p %p\n",
+	event,
+	from->address(),
+	to->address());
 
   msg.WriteToLogFile();
 }

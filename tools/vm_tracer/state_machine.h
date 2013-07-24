@@ -10,7 +10,9 @@
 using namespace std;
 
 class State;
+class StateMachine;
 
+// Describes state transition edge
 class Transition
 {
 private:
@@ -67,8 +69,6 @@ public:
   }
 };
 
-class StateMachine;
-
 
 // Base class for all different states
 class State 
@@ -88,12 +88,19 @@ class State
   
  public:
   int id;
+  // Outgoing transition edges
   TransMap edges;
-  
+  // The state machine that contains this state
+  StateMachine* machine;
+  // Instances that own this state
+  set<int> instances;
+
  public:
   State() 
     {
       edges.clear();
+      machine = NULL;
+      instances.clear();
     }
   
   // Interfaces
@@ -128,6 +135,16 @@ class State
     edges[next_s] = trans;
     return trans;
   }
+
+  void add_instance(int d)
+  {
+    instances.insert(d);
+  }
+
+  void remove_instance(int d)
+  {
+    instances.erase(d);
+  }
 };
 
 
@@ -137,10 +154,19 @@ class FunctionState : public State
   int code;
   
  public:
+  FunctionState() { code = 0; }
+  
   FunctionState( int my_id )
     {
       code = 0;
       id = my_id;
+    }
+  
+  FunctionState( int my_id, StateMachine* m )
+    {
+      code = 0;
+      id = my_id;
+      machine = m;
     }
   
   // Virtual functions
@@ -159,6 +185,7 @@ class FunctionState : public State
   {
     FunctionState* new_s = new FunctionState(id);
     new_s->code = code;
+    new_s->machine = machine;
     return new_s;
   }
   
@@ -181,45 +208,48 @@ class StateMachine
   typedef set<State*, State::state_ptr_cmp> StatesPool;
   
  protected:
+  // Record all the states belonging to this machine
   StatesPool states;
-  map<int, State*> ptrs_now;
+  // Map object/function instances to state
+  map<int, State*> inst_at;
   
-  // This class cannot be instantiated directly
-  StateMachine()
-    {
-      
-    }
-
-public:
+ public:
+  // Start state of this machine
   State* start;
-  string machine_name;
-
-public:
+  // Name of this machine
+  string m_name;
+  
+ public:
   enum Mtype {
     Function,
     Object
   };
-
+  
+  // Different state machine may have different additional actions
+  virtual State* insert_new_state(State* s) = 0;
+  
   State* search_state(State* s)
   {
     StatesPool::iterator it = states.find(s);
-
+    
     if ( it == states.end() ) {
-      s = s->clone();
-      // Update the id
-      s->id = states.size();
-      states.insert(s);
+      s = insert_new_state(s);
     }
     else
       s = *it;
-
+    
     return s;
   }
 
   void set_machine_name(const char* name)
   {
-    if ( machine_name.size() == 0 )
-      machine_name.append(name);
+    if ( m_name.size() == 0 )
+      m_name.assign(name);
+  }
+
+  void replace_machine_name(const char* name)
+  {
+    m_name.assign(name);
   }
 
   int size() 
@@ -229,35 +259,80 @@ public:
 
   State* get_instance_pos(int d)
   {
-    map<int, State*>::iterator it = ptrs_now.find(d);
-    if ( it == ptrs_now.end() ) {
+    State* s = NULL;
+
+    map<int, State*>::iterator it = inst_at.find(d);
+    if ( it == inst_at.end() ) {
       // Add this instance
-      ptrs_now[d] = start;
-      return start;
+      s = start;
+      inst_at[d] = s;
+      s->add_instance(d);
     }
-    
-    return it->second;
+    else {
+      s = it->second;
+    }
+
+    return s;
   }
 
-  void instance_walk_to(int d, State* s)
+  void instance_walk_to(int d, State* new_s)
   {
-    ptrs_now[d] = s;
+    // Update instance <-> state maps
+    State* prev_s = inst_at[d];
+    prev_s->remove_instance(d);
+
+    inst_at[d] = new_s;
+    new_s->add_instance(d);
   }
 };
 
 class FunctionMachine : public StateMachine
 {
  public:
+  // Code -> states map
+  // States are in different machines
+  typedef map<int, vector<FunctionState*>* > CodeStatesMap;
+  static CodeStatesMap* code_in;
+
+ public:
+  // Is this function approved for optimization?
   bool allow_opt;
+  // Optimization/deoptimization message
   string optMsg;
   
  public:
   FunctionMachine()
     {
       allow_opt = true;
-      start = new FunctionState(0);
+      start = new FunctionState(0, this);
       states.insert(start);
     }
+
+  State* insert_new_state(State* s)
+  {
+    FunctionState* fs = (FunctionState*)s->clone();
+    // Update the id
+    fs->id = states.size();
+
+    // Record this state
+    states.insert(fs);
+    
+    // Update code -> states map
+    int code = fs->code;
+    CodeStatesMap::iterator it = code_in->find(code);
+    vector<FunctionState*> *vec = NULL;
+
+    if ( it == code_in->end() ) {
+      vec = new vector<FunctionState*>;
+      (*code_in)[code] = vec;
+    }
+    else
+      vec = it->second;
+    
+    vec->push_back(fs);
+    
+    return fs;
+  }
 
   void set_opt_state( bool allow, const char* msg )
   {
@@ -275,6 +350,11 @@ class ObjectMachine : public StateMachine
       start = new FunctionState(0);
       states.insert(start);
     }
+
+  State* insert_new_state(State* s)
+  {
+    return s;
+  }
 };
 
 

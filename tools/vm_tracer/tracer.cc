@@ -14,8 +14,53 @@
 #include "state_machine.h"
 
 
-// Globals
+enum InternalEvent {
+#define GetEventName(name, handler) name,
+  EVENTS_LIST(GetEventName)
+  events_count
+#undef GetEventname
+};
+
+
+// Handler declarations
+#define DeclEventHanlder(name, handler) \
+  static void handler(FILE*);
+
+EVENTS_LIST(DeclEventHanlder)
+
+static void
+null_handler(FILE* file) { }
+
+#undef DeclEventHandler
+
+// Fill in the hanlder list
+EventHandler handlers[] = {
+#define GetEventHandler(name, handler) handler,
+  EVENTS_LIST(GetEventHandler)
+  null_handler
+#undef GetEventHandler
+};
+
+FunctionMachine::CodeStatesMap* FunctionMachine::code_in;
+
+// From machine ID to machine structure
 map<int, StateMachine*> machines;
+// From function address to function id
+map<int, int> functions;
+int func_id_counter = 0;
+
+
+static
+void init_machines()
+{
+  FunctionMachine::code_in = new FunctionMachine::CodeStatesMap;
+}
+
+static
+void clean_machines()
+{
+  delete FunctionMachine::code_in;
+}
 
 
 // Create a state transition
@@ -55,7 +100,7 @@ find_machine(int m_sig, StateMachine::Mtype type)
     fsm = i_fsm->second;
   }
   else{
-    if ( type == StateMachine::Mtype::Function )
+    if ( type == StateMachine::Function )
       fsm = new FunctionMachine;
     else
       fsm = new ObjectMachine;
@@ -66,26 +111,43 @@ find_machine(int m_sig, StateMachine::Mtype type)
   return fsm;
 }
 
+int
+get_function_id(int f_addr)
+{
+  map<int, int>::iterator it = functions.find(f_addr);
+  if ( it == functions.end() ) {
+    // Never seen this function before
+    return -1;
+  }
 
-StateMachine*
-install_code( StateMachine* fsm,
+  return it->second;
+}
+
+
+void
+replace_code( StateMachine* fsm,
 	      int func, int code, const char* trans_desc)
 {
   static FunctionState fstate_t(0);
   FunctionState *cur_s, *next_s;
   
-  // Obtain current position of this function
-  cur_s = (FunctionState*)fsm->get_instance_pos(func);
-  
-  // Build the target state
-  fstate_t.code = (code == -1 ? cur_s->code : code);
-   
-  // Transfer state
-  next_s = 
-    (FunctionState*)transfer( fsm, cur_s, &fstate_t, trans_desc );
-  fsm->instance_walk_to(func, next_s);
+  int func_id = get_function_id(func);
 
-  return fsm;
+  if ( func_id != -1 ) {
+    // Obtain current position of this function
+    cur_s = (FunctionState*)fsm->get_instance_pos(func_id);
+    
+    // Build the target state
+    fstate_t.code = (code == -1 ? cur_s->code : code);
+    fstate_t.machine = fsm;
+
+    // Transfer state
+    next_s = 
+      (FunctionState*)transfer( fsm, cur_s, &fstate_t, trans_desc );
+
+    // Renew the position of this function
+    fsm->instance_walk_to(func_id, next_s);
+  }
 }
 
 
@@ -106,14 +168,93 @@ create_function(FILE* file)
   char name_buf[256];
 
 
-  fscanf( file, "%p %d %p %s", 
+  fscanf( file, "%p %p %p %[^\t\n]", 
 	  &shared, &func, &code, 
 	  name_buf );
   
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
+				   StateMachine::Function);
   fsm->set_machine_name( name_buf );
-  install_code(fsm, func, code, "New");  
+  functions[func] = func_id_counter++;
+  replace_code(fsm, func, code, "New");
+
+  if ( slice_sig == shared )
+    printf( "%d %p %p %p %s",
+	    InternalEvent::CreateFunction,
+	    shared, func, code, name_buf );
+}
+
+static void
+gc_move_function(FILE* file)
+{
+  int from, to;
+  fscanf( file, "%p %p", &from, &to );
+  
+  // Replace the function to function_ID map
+  int id = 0;
+  map<int, int>::iterator it = functions.find(from);
+  if ( it == functions.end() )
+    id = func_id_counter++;
+  else {
+    id = it->second;
+    functions.erase(it);
+  }
+  
+  functions[to] = id;
+}
+
+static void
+gc_move_shared(FILE* file)
+{
+  int from, to;
+  fscanf( file, "%p %p", &from, &to );
+
+  map<int, StateMachine*>::iterator i_fsm = machines.find(from);  
+  if ( i_fsm != machines.end() ) {
+    StateMachine* fsm = i_fsm->second;
+    machines.erase(i_fsm);
+    machines[to] = fsm;
+  }
+}
+
+static void
+gc_move_code(FILE* file)
+{
+  int old_code, new_code;
+  fscanf( file, "%p %p", 
+	  &old_code, &new_code );
+
+  FunctionMachine::CodeStatesMap* code_in = FunctionMachine::code_in;
+  FunctionMachine::CodeStatesMap::iterator it = code_in->find(old_code);
+  if ( it == code_in->end() ) return;
+
+  vector<FunctionState*> *old_states = it->second;
+  int size = old_states->size();
+  vector<FunctionState*> *new_states = new vector<FunctionState*>(size);
+
+  for ( int i = 0; i < size; ++i ) {
+    FunctionState* fs = old_states->at(i);
+    
+    // We create a new state and a state transition
+    StateMachine* fsm = fs->machine;
+    fs->code = new_code;
+    State* new_fs = fsm->insert_new_state(fs);
+    fs->code = old_code;
+    transfer( fsm, fs, new_fs, "GC Code");
+    
+    // We move all the instances to the new state
+    for ( set<int>::iterator it = fs->instances.begin(),
+	    end = fs->instances.end();
+	  it != end; ++it ) {
+      int func_id = *it;
+      fsm->instance_walk_to(func_id, new_fs);
+    }
+
+    new_states->push_back((FunctionState*)new_fs);
+  }
+
+  //code_in->erase(it);
+  (*code_in)[new_code] = new_states;
 }
 
 static void
@@ -153,27 +294,40 @@ array_ops_pure(FILE* file)
 }
 
 static void
+install_code(FILE* file)
+{
+  int shared, func, code;
+  fscanf( file, "%p %p %p",
+          &shared, &func, &code );
+  
+  StateMachine* fsm = find_machine(shared,
+                                   StateMachine::Function);
+  replace_code( fsm, func, code, "Install" );
+}
+
+static void
 gen_full_code(FILE* file)
 {
   int shared, func, code;
-  fscanf( file, "%p %d %p", &shared, &func, &code );
+  fscanf( file, "%p %p %p", 
+	  &shared, &func, &code );
   
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
-  install_code( fsm, func, code, "Full" );
+				   StateMachine::Function);
+  replace_code( fsm, func, code, "Full" );
 }
 
 static void
 gen_full_deopt(FILE* file)
 {
   int shared, func, old_code, new_code;
-  fscanf( file, "%p %d %p %p", 
+  fscanf( file, "%p %p %p %p", 
 	  &shared, &func, 
 	  &old_code, &new_code );
   
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
-  install_code( fsm, func, new_code, "AddDeopt" );
+				   StateMachine::Function);
+  replace_code( fsm, func, new_code, "AddDeopt" );
 }
 
 static void
@@ -183,13 +337,13 @@ gen_opt_code(FILE* file)
   char opt_buf[128];
   
   sprintf( opt_buf, "Opt: " );
-  fscanf( file, "%p %d %p %s", 
+  fscanf( file, "%p %p %p %[^\t\n]", 
 	  &shared, &func, &code, 
 	  opt_buf + strlen(opt_buf) );
 
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
-  install_code( fsm, func, code, opt_buf );
+				   StateMachine::Function);
+  replace_code( fsm, func, code, opt_buf );
 }
 
 static void
@@ -199,12 +353,12 @@ gen_osr_code(FILE* file)
   char opt_buf[128];
 
   sprintf( opt_buf, "Osr: " );
-  fscanf( file, "%p %d %p %s",
+  fscanf( file, "%p %p %p %[^\t\n]",
           &shared, &func, &code, opt_buf + strlen(opt_buf) );
 
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
-  install_code( fsm, func, code, opt_buf );
+				   StateMachine::Function);
+  replace_code( fsm, func, code, opt_buf );
 }
 
 static void
@@ -213,11 +367,11 @@ disable_opt(FILE* file)
   int shared, func;
   char opt_buf[128];
 
-  fscanf( file, "%p %d %[^\t\n]",
+  fscanf( file, "%p %p %[^\t\n]",
           &shared, &func, opt_buf );
 
   FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+    (FunctionMachine*)find_machine(shared, StateMachine::Function);
   fsm->set_opt_state( false, opt_buf );
 }
 
@@ -227,11 +381,11 @@ reenable_opt(FILE* file)
   int shared, func;
   char opt_buf[128];
 
-  fscanf( file, "%p %d %[^\t\n]",
+  fscanf( file, "%p %p %[^\t\n]",
           &shared, &func, opt_buf );
 
   FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+    (FunctionMachine*)find_machine(shared, StateMachine::Function);
   fsm->set_opt_state( true, opt_buf );
 }
 
@@ -244,11 +398,11 @@ gen_opt_failed(FILE* file)
   sprintf( opt_buf, "OptFailed: " );
   int last_pos = strlen(opt_buf);
 
-  fscanf( file, "%p %d %[^\t\n]",
+  fscanf( file, "%p %p %[^\t\n]",
           &shared, &func, opt_buf + last_pos );
 
   FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Mtype::Function);
+    (FunctionMachine*)find_machine(shared, StateMachine::Function);
 
   if ( opt_buf[last_pos] == '-' &&
        opt_buf[last_pos+1] == '\0' ) {
@@ -256,7 +410,7 @@ gen_opt_failed(FILE* file)
     sprintf( opt_buf+last_pos, "%s", fsm->optMsg.c_str() );
   }
 
-  install_code( fsm, func, -1, opt_buf );
+  replace_code( fsm, func, -1, opt_buf );
 }
 
 static void
@@ -266,54 +420,17 @@ deopt_code(FILE* file)
   char opt_buf[128];
   
   sprintf( opt_buf, "Deopt: " );
-  fscanf( file, "%p %d %p %s", 
+  fscanf( file, "%p %p %p %s", 
 	  &shared, &func, &code, 
 	  opt_buf + strlen(opt_buf) );
 
   StateMachine* fsm = find_machine(shared,
-				   StateMachine::Mtype::Function);
-  install_code( fsm, func, code, opt_buf );
+				   StateMachine::Function);
+  replace_code( fsm, func, code, opt_buf );
 }
 
-static void
-null_handler(FILE* file)
-{
 
-}
-
-// ---------------------------
-enum InternalEvent {
-#define GetEventName(name, handler) name,
-  EVENTS_LIST(GetEventName)
-  events_count
-#undef GetEventname
-};
-
-EventHandler handlers[] = {
-#define GetEventHandler(name, handler) handler,
-  EVENTS_LIST(GetEventHandler)
-  null_handler
-#undef GetEventHandler
-};
-
-
-static int 
-build_automata()
-{
-  FILE* file;
-  int event_type;
-  
-  file = fopen( input_file, "r" );
-  if ( file == NULL ) return 0;
-
-  while ( fscanf(file, "%d", &event_type) == 1 ) {
-    handlers[event_type](file);
-  }
-  
-  fclose(file);
-  return 1;
-}
-
+// -----------------system functions---------------
 static void
 output_graphviz()
 {
@@ -335,7 +452,7 @@ output_graphviz()
 	it != machines.end();
 	++it ) {
     StateMachine* fsm = it->second;
-    if ( fsm->size() < 4 ) continue;
+    if ( fsm->size() < 6 ) continue;
 
     State* init_state = fsm->start;
     fprintf(file, "digraph G%d {\n", n_graph);
@@ -357,7 +474,7 @@ output_graphviz()
 	id = 0;
 	fprintf(file, 
 		"\t0 [shape=ellipse, peripheries=2, label=\"%s\"];\n",
-		fsm->machine_name.c_str() );
+		fsm->m_name.c_str() );
       }
       else {
 	id = cur_s->id;
@@ -401,6 +518,28 @@ output_graphviz()
   }
   
   fclose(file);
+}
+
+static int 
+build_automata()
+{
+  FILE* file;
+  int event_type;
+  
+  file = fopen( input_file, "r" );
+  if ( file == NULL ) return 0;
+
+  init_machines();
+
+  while ( fscanf(file, "%d", &event_type) == 1 ) {
+    handlers[event_type](file);
+  }
+  
+  fclose(file);
+  
+  clean_machines();
+
+  return 1;
 }
 
 
