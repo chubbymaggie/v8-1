@@ -434,6 +434,7 @@ namespace internal {
   F(Abort, 2, 1) \
   /* Logging */ \
   F(Log, 2, 1) \
+  F(LogFunctionCreate, 1, 1) \
   /* ES5 */ \
   F(LocalKeys, 1, 1) \
   /* Cache suport */ \

@@ -174,14 +174,18 @@ create_function(FILE* file)
   
   StateMachine* fsm = find_machine(shared,
 				   StateMachine::Function);
-  fsm->set_machine_name( name_buf );
+  if ( fsm->has_no_name() ) {
+    fsm->set_machine_name( name_buf );
+  }
+
   functions[func] = func_id_counter++;
   replace_code(fsm, func, code, "New");
-
-  if ( slice_sig == shared )
+  
+  if ( slice_sig == shared ) {
     printf( "%d %p %p %p %s",
 	    InternalEvent::CreateFunction,
 	    shared, func, code, name_buf );
+  }
 }
 
 static void
@@ -446,13 +450,16 @@ output_graphviz()
     return;
   }
 
+  //printf( "count machines = %d\n", machines.size() );
+
   // Do BFS to draw graph
   n_graph = 0;
   for ( map<int,StateMachine*>::iterator it = machines.begin();
 	it != machines.end();
 	++it ) {
     StateMachine* fsm = it->second;
-    if ( fsm->size() < 6 ) continue;
+    if ( fsm->size() < states_count_limit ) continue;
+    if ( fsm->has_no_name() ) continue;
 
     State* init_state = fsm->start;
     fprintf(file, "digraph G%d {\n", n_graph);

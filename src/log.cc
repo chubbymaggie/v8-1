@@ -679,13 +679,15 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	  msg.Append(" %p", new_code);
 
 	  // Inspect the name of this function
-	  String* debug_name = NULL;
-	  if ( shared != NULL ) debug_name = shared->DebugName();
-	  if ( debug_name == NULL || 
-			debug_name->length() == 0 )
-		msg.Append(" Closure");
+	  String* f_name = NULL;
+	  if ( shared != NULL ) f_name = shared->DebugName();
+	  if ( f_name != NULL && 
+			f_name->length() > 0 ) {
+		SmartArrayPointer<char> c_f_name = f_name->ToCString();
+		msg.Append(" %s", *c_f_name);
+	  }
 	  else {
-		msg.Append(" %s", *(debug_name->ToCString()));
+		msg.Append(" Closure");
 	  }
 
 	  // Compute the position of this function in source code

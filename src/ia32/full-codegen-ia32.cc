@@ -1278,6 +1278,11 @@ void FullCodeGenerator::EmitNewClosure(Handle<SharedFunctionInfo> info,
     __ CallRuntime(Runtime::kNewClosure, 3);
   }
   context()->Plug(eax);
+
+  if ( FLAG_trace_function_internals ) {
+	__ push(eax);
+	__ CallRuntime(Runtime::kLogFunctionCreate, 1);
+  }
 }
 
 

@@ -3554,6 +3554,8 @@ MaybeObject* Heap::AllocateSharedFunctionInfo(Object* name) {
   if (!maybe->To<SharedFunctionInfo>(&share)) return maybe;
 
   // Set pointer fields.
+  /*if ( FLAG_trace_function_internals)
+    PrintF( "Create Function = %s\n", (*String::cast(name)->ToCString()) );*/
   share->set_name(name);
   Code* illegal = isolate_->builtins()->builtin(Builtins::kIllegal);
   share->set_code(illegal);
@@ -4286,6 +4288,19 @@ MaybeObject* Heap::AllocateFunction(Map* function_map,
     if (!maybe_result->ToObject(&result)) return maybe_result;
   }
   InitializeFunction(JSFunction::cast(result), shared, prototype);
+
+  if ( FLAG_trace_function_internals ) {
+	JSFunction* function = JSFunction::cast(result);
+	Code* code = function->code();
+	LOG(isolate(),
+		EmitFunctionEvent(
+		Logger::CreateFunction,
+		function,
+		code,			  // might be null
+		shared)
+	);
+  }
+
   return result;
 }
 

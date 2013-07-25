@@ -213,6 +213,13 @@ class StateMachine
   // Map object/function instances to state
   map<int, State*> inst_at;
   
+  StateMachine()
+    {
+      states.clear();
+      inst_at.clear();
+      m_name.clear();
+    }
+
  public:
   // Start state of this machine
   State* start;
@@ -243,13 +250,12 @@ class StateMachine
 
   void set_machine_name(const char* name)
   {
-    if ( m_name.size() == 0 )
       m_name.assign(name);
   }
 
-  void replace_machine_name(const char* name)
+  bool has_no_name()
   {
-    m_name.assign(name);
+    return m_name.size() == 0;
   }
 
   int size() 
@@ -313,8 +319,6 @@ class FunctionMachine : public StateMachine
     FunctionState* fs = (FunctionState*)s->clone();
     // Update the id
     fs->id = states.size();
-
-    // Record this state
     states.insert(fs);
     
     // Update code -> states map

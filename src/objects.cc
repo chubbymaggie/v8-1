@@ -1340,7 +1340,6 @@ void JSObject::JSObjectShortPrint(StringStream* accumulator) {
       }
       accumulator->Add(" (SharedFunctionInfo %p)",
                        reinterpret_cast<void*>(function->shared()));
-	  //accumulator->Add(", (Map %p)", reinterpret_cast<void*>(function->map()));
       accumulator->Put('>');
       break;
     }

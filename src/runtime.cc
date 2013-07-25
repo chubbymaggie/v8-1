@@ -13740,6 +13740,26 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Log) {
 }
 
 
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogFunctionCreate) {
+  SealHandleScope shs(isolate);
+  ASSERT(args.length() == 1);
+  CONVERT_ARG_CHECKED(JSFunction, function, 0);
+  DisallowHeapAllocation no_gc;
+  
+  Code* code = function->code();
+  SharedFunctionInfo* shared = function->shared();
+  LOG( function->GetIsolate(),
+	  	EmitFunctionEvent(
+		Logger::CreateFunction,
+		function,
+		code,		  // The code might be a lazy compile stub
+		shared)
+	);
+
+  return function;
+}
+
+
 RUNTIME_FUNCTION(MaybeObject*, Runtime_IS_VAR) {
   UNREACHABLE();  // implemented as macro in the parser
   return NULL;
