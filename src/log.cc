@@ -415,6 +415,8 @@ Logger::Logger(Isolate* isolate)
     prev_to_(NULL),
     prev_code_(NULL),
     epoch_(0) {
+	  is_tracing_internals_ 
+		= FLAG_trace_internals_start ? true : false;
 }
 
 
@@ -648,12 +650,39 @@ void Logger::CodeDeoptEvent(Code* code) {
 }
 
 
-void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
-				Code* code, SharedFunctionInfo* shared, const char* add_msg) {
-  if (!log_->IsEnabled()) return;
-  if ( JSFunction::id_counter < JSFunction::snapshot_limit )		// A snapshot function
-	  return;
+void Logger::ConsFunctionName(LogMessageBuilder& msg, SharedFunctionInfo* shared)
+{
+  // Inspect the name of this function
+  String* f_name = NULL;
+  if ( shared != NULL ) f_name = shared->DebugName();
+  if ( f_name != NULL && 
+		f_name->length() > 0 ) {
+	SmartArrayPointer<char> c_f_name = f_name->ToCString();
+	msg.Append(" %s", *c_f_name);
+  }
+  else {
+	msg.Append(" Closure");
+  }
 
+  // Compute the position of this function in source code
+  int line_num = -1;
+  if ( shared != NULL ) {
+	Object* maybe_script = shared->script();
+	if ( maybe_script->IsScript() ) {
+	  HandleScope scope(isolate_);
+	  Handle<Script> script(Script::cast(maybe_script));
+	  line_num = GetScriptLineNumber( script, 
+		  								shared->start_position()) + 1;
+	}
+  }
+  msg.Append("@%d", line_num);
+}
+
+void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
+							   Code* code, SharedFunctionInfo* shared, const char* add_msg) {
+  if (!log_->IsEnabled() || 
+	is_tracing_internals_ == false) return;
+  
   LogMessageBuilder msg(this);
   
   // Format the input parameters
@@ -666,9 +695,8 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   Address shared_addr = NULL;
   if ( shared != NULL ) shared_addr = shared->address();
 
-  msg.Append("%d %p %p", 
+  msg.Append("%d %p", 
 	  event,
-	  shared_addr,
 	  func_addr);
 
   // Followed are handlers for different event types
@@ -676,44 +704,19 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   case CreateFunction:
 	{
 	  // Record the installed code address
-	  msg.Append(" %p", new_code);
-
-	  // Inspect the name of this function
-	  String* f_name = NULL;
-	  if ( shared != NULL ) f_name = shared->DebugName();
-	  if ( f_name != NULL && 
-			f_name->length() > 0 ) {
-		SmartArrayPointer<char> c_f_name = f_name->ToCString();
-		msg.Append(" %s", *c_f_name);
-	  }
-	  else {
-		msg.Append(" Closure");
-	  }
-
-	  // Compute the position of this function in source code
-	  int line_num = -1;
-	  if ( shared != NULL ) {
-		Object* maybe_script = shared->script();
-		if ( maybe_script->IsScript() ) {
-		  Handle<Script> script(Script::cast(maybe_script));
-		  line_num = GetScriptLineNumber( script, 
-		  									shared->start_position()) + 1;
-		}
-	  }
-	  msg.Append("@%d", line_num);
+	  msg.Append(" %p %p", shared_addr, new_code);
+	  ConsFunctionName(msg, shared);
 	}
 	break;
 
-  case InstallCode:
   case GenFullCode:
 	msg.Append(" %p", new_code);
 	break;
 
   case GenFullWithDeopt:
 	{
-	  Address old_code = func->code()->address();
-	  msg.Append(" %p %p",
-			old_code, new_code);
+	  //Address old_code = func->code()->address();
+	  msg.Append(" %p", new_code);
 	}
 	break;
 
@@ -732,11 +735,13 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 
   case DisableOpt:
   case ReenableOpt:
-	msg.Append(" %s", add_msg);
+	msg.Append(" %p %s", shared_addr, add_msg);
 	break;
 
   case OptFailed:
 	{
+	  // We also output the new code, for the case it is different to old code
+	  msg.Append( " %p", new_code );
 	  if ( add_msg != NULL )
 		msg.Append(" %s", add_msg);
 	  else
@@ -747,7 +752,21 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 
   case DeoptCode:
 	{
-	  msg.Append(" %p %s", new_code, add_msg);
+	  // Perhaps sometimes we miss code generation
+	  // We output the old to indicate this case, :<
+	  Address old_code = NULL;
+	  if ( func != NULL ) old_code = func->code()->address();
+	  
+	  const int kMaxOptCount =
+		(FLAG_deopt_every_n_times == 0 ? FLAG_max_opt_count : 1000) + 1;
+	  
+	  msg.Append(" %p %d|%d",
+		old_code,
+		shared->opt_count(), 
+		kMaxOptCount ); 
+
+	  msg.Append(" %p %s", 
+		  new_code, add_msg);
 	}
 	break;
 
@@ -756,29 +775,117 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   }
 
   msg.Append("\n");
+  msg.WriteToLogFile();
+}
 
-  /*
-  if ( event == InternalEvent::GenOptCode &&
-	add_msg != NULL && strcmp(add_msg, "debug") == 0 ) {
-	PrintF("----------Inside log: code = %p shared = %p func = %p\n", 
-	  new_code, shared_addr, func_id);
-	Flush();
+void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, 
+							 HeapObject* alloc_sig, ...)
+{
+  if (!log_->IsEnabled() || 
+	is_tracing_internals_ == false) return;
+
+  Address obj_addr = NULL;
+  Address map_addr = NULL;
+
+  if ( obj != NULL ) {
+	obj_addr = obj->address();
+	map_addr = obj->map()->address();
   }
-  */
 
+  LogMessageBuilder msg(this);
+
+  msg.Append( "%d %p",
+	event,
+	obj_addr);
+
+  switch (event)
+  {
+  case v8::internal::Logger::CreateObject:
+  case v8::internal::Logger::CreateArray:
+	{
+	  Address alloc_sig_addr = NULL;
+	  if ( alloc_sig != NULL ) alloc_sig_addr = alloc_sig->address();
+
+	  msg.Append( " %p %p", 
+		alloc_sig_addr, map_addr );
+
+	  // Output object name
+	  va_list arg_ptr;
+	  va_start(arg_ptr, alloc_sig);
+
+	  if ( alloc_sig->IsJSObject() ) {
+		// Get enclosing function of this literal
+		JSFunction* base_func = va_arg(arg_ptr, JSFunction*);
+		// Get index of the boilerplate
+		int index = va_arg(arg_ptr, int);
+		
+		ConsFunctionName(msg, base_func->shared());
+		msg.Append( "#%d", index );
+	  }
+	  else {
+		// The constructor function sharedinfo
+		SharedFunctionInfo* shared = SharedFunctionInfo::cast(alloc_sig);
+		ConsFunctionName(msg, shared);
+		msg.Append( "#constr" );
+	  }
+
+	  va_end(arg_ptr);
+	}
+	break;
+
+  case v8::internal::Logger::ChangeType:
+	break;
+
+  case v8::internal::Logger::ExpandArray:
+	{
+	  JSArray* array = JSArray::cast(obj);
+	  ElementsKind kind = array->map()->elements_kind();
+	  int base_size = kIntSize;
+	  if ( kind == FAST_DOUBLE_ELEMENTS ||
+		kind == FAST_HOLEY_DOUBLE_ELEMENTS )
+		base_size = kDoubleSize;
+
+	  // Now we compute how many data are copied
+	  va_list arg_ptr;
+	  va_start(arg_ptr, alloc_sig);
+	  // Obtain the array capacity before growing
+	  int old_capacity = va_arg(arg_ptr,int);
+	  va_end(arg_ptr);
+
+	  int bytes = base_size * old_capacity;
+	  msg.Append( " %d", bytes );
+	}
+	break;
+
+  case v8::internal::Logger::MakeHole:
+	break;
+  case v8::internal::Logger::ToSlowMode:
+	break;
+  case v8::internal::Logger::ArrayOpsStoreChange:
+	break;
+  case v8::internal::Logger::ArrayOpsPure:
+	break;
+  default:
+	break;
+  }
+  msg.Append("\n");
   msg.WriteToLogFile();
 }
 
 void Logger::EmitGCMoveEvent(HeapObject* from, HeapObject* to)
 {
-  if (!log_->IsEnabled()) return;
+  if (!log_->IsEnabled() || 
+	is_tracing_internals_ == false) return;
 
   InternalEvent event;
 
   if ( to->IsJSFunction() ) {
-	//if ( JSFunction::id_counter < JSFunction::snapshot_limit )		// A snapshot function
-	//  return;
+	/*JSFunction* func = JSFunction::cast(to);
+	if ( func->shared()->native() ) return;*/
 	event = GCMoveFunction;
+  }
+  else if ( to->IsJSObject() ) {
+	event = GCMoveObject;
   }
   else if ( to->IsSharedFunctionInfo() ) {
 	event = GCMoveShared;
@@ -798,6 +905,13 @@ void Logger::EmitGCMoveEvent(HeapObject* from, HeapObject* to)
 
   msg.WriteToLogFile();
 }
+
+
+void Logger::toggle_trace_internal(bool set_as)
+{
+  is_tracing_internals_ = set_as;
+}
+
 
 void Logger::TimerEvent(StartEnd se, const char* name) {
   if (!log_->IsEnabled()) return;

@@ -1150,6 +1150,19 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
                                                    new_capacity);
 
   environment()->Push(new_elements);
+
+  // We log array growing action
+  if ( FLAG_trace_object_internals ) {
+	// Push the runtime call parameters
+	Add<HPushArgument>(Add<HConstant>(Logger::ExpandArray));
+	Add<HPushArgument>(object);
+	Add<HPushArgument>(current_capacity);
+
+    Add<HCallRuntime>(context,
+	  isolate()->factory()->empty_string(),
+      Runtime::FunctionForId(Runtime::kLogObjectManipulate),
+      3);
+  }
   capacity_checker.Else();
 
   environment()->Push(elements);
@@ -5402,6 +5415,22 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
   // of the property values and is the value of the entire expression.
   Push(literal);
 
+  if ( FLAG_trace_object_internals ) {
+	// We log the array created at this literal
+	int literal_index = expr->literal_index();
+
+	// Push the runtime call 
+	Add<HPushArgument>(literal);
+	Add<HPushArgument>(Add<HConstant>(closure));
+	Add<HPushArgument>(Add<HConstant>(Logger::CreateObject));
+    Add<HPushArgument>(Add<HConstant>(literal_index));
+
+    Add<HCallRuntime>(context,
+                      isolate()->factory()->empty_string(),
+                      Runtime::FunctionForId(Runtime::kLogObjectCreate),
+                      4);
+  }
+
   expr->CalculateEmitStore(zone());
 
   for (int i = 0; i < expr->properties()->length(); i++) {
@@ -5454,7 +5483,7 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
       default: UNREACHABLE();
     }
   }
-
+  
   if (expr->has_function()) {
     // Return the result of the transformation to fast properties
     // instead of the original since this operation changes the map
@@ -5464,7 +5493,7 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
     HToFastProperties* result = Add<HToFastProperties>(Pop());
     return ast_context()->ReturnValue(result);
   } else {
-    return ast_context()->ReturnValue(Pop());
+	return ast_context()->ReturnValue(Pop());
   }
 }
 
@@ -5558,6 +5587,23 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   // The literal index is on the stack, too.
   Push(Add<HConstant>(expr->literal_index()));
 
+  if ( FLAG_trace_object_internals ) {
+	// We log the array created at this literal
+	int literal_index = expr->literal_index();
+	Handle<JSFunction> function = function_state()->compilation_info()->closure();
+
+	// Push the runtime call parameters
+	Add<HPushArgument>(literal);
+	Add<HPushArgument>(Add<HConstant>(function));
+	Add<HPushArgument>(Add<HConstant>(Logger::CreateArray));
+    Add<HPushArgument>(Add<HConstant>(literal_index));
+
+    Add<HCallRuntime>(context,
+                      isolate()->factory()->empty_string(),
+                      Runtime::FunctionForId(Runtime::kLogObjectCreate),
+                      4);
+  }
+
   HInstruction* elements = NULL;
 
   for (int i = 0; i < length; i++) {
@@ -5595,7 +5641,8 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   }
 
   Drop(1);  // array literal index
-  return ast_context()->ReturnValue(Pop());
+  HValue* ret_val = Pop();
+  return ast_context()->ReturnValue(ret_val);
 }
 
 

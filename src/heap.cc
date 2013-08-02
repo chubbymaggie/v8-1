@@ -2004,7 +2004,9 @@ class ScavengingVisitor : public StaticVisitorBase {
     source->set_map_word(MapWord::FromForwardingAddress(target));
 	
 	// We also record movement event
-	if ( FLAG_trace_function_internals ) {
+	if ( FLAG_trace_function_internals 
+	  || FLAG_trace_object_internals 
+	  ) {
 	  LOG( heap->isolate(),
 			EmitGCMoveEvent(source, target));
 	}
@@ -4289,17 +4291,17 @@ MaybeObject* Heap::AllocateFunction(Map* function_map,
   }
   InitializeFunction(JSFunction::cast(result), shared, prototype);
 
-  if ( FLAG_trace_function_internals ) {
-	JSFunction* function = JSFunction::cast(result);
-	Code* code = function->code();
-	LOG(isolate(),
-		EmitFunctionEvent(
-		Logger::CreateFunction,
-		function,
-		code,			  // might be null
-		shared)
-	);
-  }
+ // if ( FLAG_trace_function_internals ) {
+	//JSFunction* function = JSFunction::cast(result);
+	//Code* code = function->code();
+	//LOG(isolate(),
+	//	EmitFunctionEvent(
+	//	Logger::CreateFunction,
+	//	function,
+	//	code,			  // might be null
+	//	shared)
+	//);
+ // }
 
   return result;
 }
@@ -4474,6 +4476,7 @@ MaybeObject* Heap::AllocateJSObjectFromMap(Map* map, PretenureFlag pretenure) {
                             map);
   ASSERT(JSObject::cast(obj)->HasFastElements() ||
          JSObject::cast(obj)->HasExternalArrayElements());
+
   return obj;
 }
 

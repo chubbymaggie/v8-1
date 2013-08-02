@@ -8016,6 +8016,17 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NewObject) {
   isolate->counters()->constructed_objects()->Increment();
   isolate->counters()->constructed_objects_runtime()->Increment();
 
+  if ( FLAG_trace_object_internals ) {
+	SharedFunctionInfo* shared = function->shared();
+	if ( !shared->native() ) {
+	  LOG( isolate,
+		EmitObjectEvent( Logger::CreateObject,
+		  *result,
+		  shared )
+	  );
+	}
+  }
+
   return *result;
 }
 
@@ -13740,15 +13751,24 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Log) {
 }
 
 
+RUNTIME_FUNCTION(MaybeObject*, Runtime_StartLogInternals) {
+  SealHandleScope shs(isolate);
+  ASSERT(args.length() == 0);
+  isolate->logger()->toggle_trace_internal(true);
+  return isolate->heap()->undefined_value();
+}
+
+
 RUNTIME_FUNCTION(MaybeObject*, Runtime_LogFunctionCreate) {
   SealHandleScope shs(isolate);
   ASSERT(args.length() == 1);
   CONVERT_ARG_CHECKED(JSFunction, function, 0);
+  if ( !FLAG_trace_function_internals ) return function;
   DisallowHeapAllocation no_gc;
   
   Code* code = function->code();
   SharedFunctionInfo* shared = function->shared();
-  LOG( function->GetIsolate(),
+  LOG( isolate,
 	  	EmitFunctionEvent(
 		Logger::CreateFunction,
 		function,
@@ -13757,6 +13777,61 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LogFunctionCreate) {
 	);
 
   return function;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectCreate) {
+  SealHandleScope shs(isolate);
+  ASSERT(args.length() == 4);
+
+  CONVERT_ARG_CHECKED(JSObject, instance, 0);
+  CONVERT_ARG_CHECKED(JSFunction, base_func, 1);
+  if ( base_func->shared()->native() ) return instance;
+  CONVERT_SMI_ARG_CHECKED(event, 2);
+  CONVERT_SMI_ARG_CHECKED(index, 3);
+  DisallowHeapAllocation no_gc;
+
+  FixedArray* boilerplates = base_func->literals();
+  JSObject* boilerplate = JSObject::cast( boilerplates->get(index) );
+
+  LOG( isolate,
+	  	EmitObjectEvent(
+		(Logger::InternalEvent)event,
+		instance,
+		boilerplate,
+		base_func, index)
+	);
+  
+  return instance;
+  //return isolate->heap()->undefined_value();
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectManipulate) {
+  SealHandleScope shs(isolate);
+  DisallowHeapAllocation no_gc;
+  CONVERT_SMI_ARG_CHECKED(event, 0);
+  CONVERT_ARG_CHECKED(JSObject, instance, 1);
+  
+  if ( event == Logger::ExpandArray ) {
+	CONVERT_SMI_ARG_CHECKED(old_capacity, 2);
+	LOG( isolate,
+	  	  EmitObjectEvent(
+		  Logger::ExpandArray,
+		  instance,
+		  NULL, old_capacity)
+	);
+  }
+  else {
+	LOG( isolate,
+	  		EmitObjectEvent(
+			(Logger::InternalEvent)event,
+			instance,
+			NULL)
+	  );
+  }
+
+  return instance;
 }
 
 

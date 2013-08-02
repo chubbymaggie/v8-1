@@ -1277,12 +1277,8 @@ void FullCodeGenerator::EmitNewClosure(Handle<SharedFunctionInfo> info,
                       : isolate()->factory()->false_value()));
     __ CallRuntime(Runtime::kNewClosure, 3);
   }
-  context()->Plug(eax);
 
-  if ( FLAG_trace_function_internals ) {
-	__ push(eax);
-	__ CallRuntime(Runtime::kLogFunctionCreate, 1);
-  }
+  context()->Plug(eax);
 }
 
 
@@ -1621,6 +1617,27 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
   // result_saved is false the result is in eax.
   bool result_saved = false;
 
+  // We log the information before unkonwn operations change eax
+  if ( FLAG_trace_object_internals ) {
+	// We first keep a copy of object information
+	__ push(eax);
+	result_saved = true;
+
+	// The pointer of newly generated JSObject is stored in eax
+	__ push(eax);
+	// Obtain the enclosing function
+	// We decide in runtime function if this object is kept
+	__ mov(ebx, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
+	__ push(ebx);
+	// Push the event type
+	__ push(Immediate(Smi::FromInt(Logger::CreateObject)));
+	// Push the index of boilerplate
+	__ push(Immediate(Smi::FromInt(expr->literal_index())));
+
+	// Call runtime to generate log message
+	__ CallRuntime(Runtime::kLogObjectCreate, 4);
+  }
+
   // Mark all computed expressions that are bound to a key that
   // is shadowed by a later occurrence of the same key. For the
   // marked expressions, no store code is emitted.
@@ -1707,7 +1724,7 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
   }
 
   if (result_saved) {
-    context()->PlugTOS();
+    context()->PlugTOS();	  // top of stack
   } else {
     context()->Plug(eax);
   }
@@ -1780,6 +1797,28 @@ void FullCodeGenerator::VisitArrayLiteral(ArrayLiteral* expr) {
   }
 
   bool result_saved = false;  // Is the result saved to the stack?
+
+  // We log the information before unkonwn operations change eax
+  if ( FLAG_trace_object_internals ) {
+	// We first keep a copy of array information
+	__ push(eax);
+    __ push(Immediate(Smi::FromInt(expr->literal_index())));
+    result_saved = true;
+
+	// The pointer of newly generated JSArray is stored in eax
+	__ push(eax);
+	// Obtain the enclosing function
+	// We decide in runtime function if this object is kept
+	__ mov(ebx, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
+	__ push(ebx);
+	// Push the event type
+	__ push(Immediate(Smi::FromInt(Logger::CreateArray)));
+	// Push the index of boilerplate
+	__ push(Immediate(Smi::FromInt(expr->literal_index())));
+
+	// Call runtime to generate log message
+	__ CallRuntime(Runtime::kLogObjectCreate, 4);
+  }
 
   // Emit code to evaluate all the non-constant subexpressions and to store
   // them into the newly cloned array.

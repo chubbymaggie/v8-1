@@ -630,19 +630,6 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
       MapForNewFunction(isolate(), function_info),
       pretenure);
 
-  // Log function create event
-  // We log it before any other changes to it
- // if ( FLAG_trace_function_internals ) {
-	//Code* code = result->code();
-	//LOG(isolate(),
-	//	EmitFunctionEvent(
-	//	Logger::CreateFunction,
-	//	*result,
-	//	code,		  // The code might be a lazy compile stub
-	//	*function_info)
-	//);
- // }
-
   if (function_info->ic_age() != isolate()->heap()->global_ic_age()) {
     function_info->ResetForNewContext(isolate()->heap()->global_ic_age());
   }
@@ -676,6 +663,18 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
       !function_info->optimization_disabled() &&
       !isolate()->DebuggerHasBreakPoints()) {
     result->MarkForLazyRecompilation();
+  }
+
+  // Log function create event
+  if ( FLAG_trace_function_internals ) {
+	Code* code = result->code();
+	LOG(isolate(),
+		EmitFunctionEvent(
+		Logger::CreateFunction,
+		*result,
+		code,		  // The code might be a lazy compile stub
+		*function_info)
+	);
   }
 
   return result;

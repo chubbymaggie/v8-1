@@ -332,8 +332,10 @@ class Logger {
   // ==== Events logged by --trace-*-internals ===
   #define EVENTS_LIST(V)                                  \
 	V(CreateObject,         create_object)                \
-	V(CreateFunction,       create_function)              \
+	V(CreateArray,			create_array)				  \
+	V(CreateFunction,       create_function)			  \
 	V(GCMoveFunction,		gc_move_function)			  \
+	V(GCMoveObject,			gc_move_object)				  \
 	V(GCMoveShared,			gc_move_shared)				  \
 	V(GCMoveCode,			gc_move_code)	  			  \
 	V(ChangeType,           change_type)                  \
@@ -342,7 +344,6 @@ class Logger {
 	V(ToSlowMode,           to_slow)                      \
 	V(ArrayOpsStoreChange,  array_ops_store_change)       \
 	V(ArrayOpsPure,         array_ops_pure)               \
-	V(InstallCode,			install_code)				  \
 	V(GenFullCode,			gen_full_code)			     \
 	V(GenFullWithDeopt,		gen_full_deopt)				  \
 	V(GenOptCode,           gen_opt_code)                 \
@@ -363,9 +364,18 @@ class Logger {
   // Note, we pass func, code, shared separately because 
   // sometimes, code != func->code(), func == NULL (hence func->shared() is invalid)
   void EmitFunctionEvent(InternalEvent event, JSFunction* func,
-				Code* code, SharedFunctionInfo* shared, const char* add_msg = NULL);
+	Code* code, SharedFunctionInfo* shared, const char* add_msg = NULL);
+
+  // Trace object actions
+  // alloc_site is a boilerplace object if object is created by literal
+  // otherwise alloc_site is the sharedinfo of obj's constructor 
+  void EmitObjectEvent(InternalEvent event, JSObject* obj, 
+	HeapObject* alloc_sig, ...);
 
   void EmitGCMoveEvent(HeapObject* from, HeapObject* to);
+
+  // We start or terminate the tracing
+  void toggle_trace_internal(bool);
 
   // Log an event reported from generated code
   void LogRuntime(Vector<const char> format, JSArray* args);
@@ -419,6 +429,9 @@ class Logger {
 
   explicit Logger(Isolate* isolate);
   ~Logger();
+
+  // We build a readable function name
+  void ConsFunctionName(LogMessageBuilder&, SharedFunctionInfo*);
 
   // Issue code notifications.
   void IssueCodeAddedEvent(Code* code,
@@ -557,6 +570,8 @@ class Logger {
   Address prev_code_;
 
   int64_t epoch_;
+
+  bool is_tracing_internals_;
 
   friend class CpuProfiler;
 };

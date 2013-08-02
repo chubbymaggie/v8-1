@@ -57,8 +57,6 @@
 namespace v8 {
 namespace internal {
 
-int JSFunction::id_counter = 0;
-
 MUST_USE_RESULT static MaybeObject* CreateJSValue(JSFunction* constructor,
                                                   Object* value) {
   Object* result;
@@ -9348,12 +9346,15 @@ void SharedFunctionInfo::TrimOptimizedCodeMap(int shrink_by) {
 bool JSFunction::CompileLazy(Handle<JSFunction> function,
                              ClearExceptionFlag flag) {
   bool result = true;
+  bool is_optimizing = true;
+
   if (function->shared()->is_compiled()) {
     function->ReplaceCode(function->shared()->code());
   } else {
     ASSERT(function->shared()->allows_lazy_compilation());
     CompilationInfoWithZone info(function);
     result = CompileLazyHelper(&info, flag);
+	is_optimizing = info.IsOptimizing();
     ASSERT(!result || function->is_compiled());
   }
 
@@ -9362,7 +9363,7 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
 	Code* code = function->code();
 	LOG(function->GetIsolate(),
 		EmitFunctionEvent(
-		  Logger::GenFullCode,
+		is_optimizing ? Logger::GenOptCode : Logger::GenFullCode,
 		  *function,
 		  code,
 		  function->shared()

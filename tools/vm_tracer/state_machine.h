@@ -3,6 +3,8 @@
 #ifndef STATE_MACHINE_H
 #define STATE_MACHINE_H
 
+#include <string>
+#include <sstream>
 #include <vector>
 #include <map>
 #include <set>
@@ -12,62 +14,106 @@ using namespace std;
 class State;
 class StateMachine;
 
+// Describe a transition
+struct TransPacket
+{
+  string* reason;
+  int extra;
+
+  TransPacket()
+  {
+    reason = NULL;
+    extra = 0;
+  }
+
+  TransPacket(const char* desc)
+  {
+    reason = new string(desc);
+    extra = 0;
+  }
+
+  void clear()
+  {
+    if ( reason != NULL ) {
+      delete reason;
+      reason = NULL;
+    }
+  }
+  
+  void describe(stringstream& ss) const
+  {
+    ss << *reason;
+    if ( extra != 0 )
+      ss << ": " << extra;
+  }
+  
+  bool operator<(const TransPacket& rhs) const
+  {
+    return (*reason) < *(rhs.reason);
+  }
+};
+
 // Describes state transition edge
 class Transition
 {
-private:
-  struct str_ptr_cmp
-  {
-    bool operator()(const string* lhs, const string* rhs) const
-    {
-      return (*lhs) < (*rhs);
-    }
-  };
-
-public:
-  State* target;
+ public:
+  // Transition target
+  State *source, *target;
+  // Number of times this transition are repeated
   int count;
-  set<string*, str_ptr_cmp> reasons;
-  
+  // Why did this transition happen?
+  set<TransPacket> triggers;
+
+
+ public:  
   Transition()
-  {
-    target = NULL;
-    count = 0;
-  }
+    {
+      source = NULL;
+      target = NULL;
+      count = 0;
+    }
   
-  Transition(State* t_)
+  Transition(State* s_, State* t_)
+    {
+      source = s_;
+      target = t_;
+      count = 0;
+    }
+
+  void insert_reason(const char* r, int extra = 0)
   {
-    target = t_;
-    count = 0;
+    if ( r == NULL ) return;
+    TransPacket tp(r);
+
+    set<TransPacket>::iterator it = triggers.find(tp);
+    if ( it != triggers.end() ) {
+      tp.clear();
+      tp = *it;
+      triggers.erase(it);
+    }
+
+    tp.extra += extra;
+    triggers.insert(tp);
   }
 
-  void insert_reason(const char* r)
-  {
-    string *rs = new string(r);
-
-    if ( reasons.find(rs) == reasons.end() )
-      reasons.insert( rs );
-    else
-      delete rs;
-  }
-
-  string* merge_reasons()
+  void merge_reasons(string& final)
   {
     int i = 0;
-    string *final = new string;
+    stringstream ss;
     
-    for ( set<string*, str_ptr_cmp>::iterator it = reasons.begin();
-	  it != reasons.end();
+    for ( set<TransPacket>::iterator it = triggers.begin();
+	  it != triggers.end();
 	  ++it ) {
       if ( i > 0 )
-	final->push_back('+');
-      final->append( **it );
+	ss << '+';
+      it->describe(ss);
       ++i;
     }
     
-    return final;
+    final = ss.str();
   }
 };
+
 
 
 // Base class for all different states
@@ -76,8 +122,7 @@ class State
  public:
   struct state_ptr_cmp
   {
-    bool operator()(const State* lhs, 
-		    const State* rhs) const
+    bool operator()(State* lhs, State* rhs)
     {
       return lhs->less_than( rhs );
     }
@@ -87,6 +132,7 @@ class State
   typedef TransMap::iterator TransIterator;
   
  public:
+  // ID for this state
   int id;
   // Outgoing transition edges
   TransMap edges;
@@ -104,10 +150,11 @@ class State
     }
   
   // Interfaces
-  virtual bool equals( const State* ) const = 0;
   virtual bool less_than( const State* ) const = 0;
   virtual State* clone() const = 0;
   virtual string descriptor() const = 0;
+  virtual void set_core_data(int) = 0;
+  virtual int get_core_data() = 0;
   
   // Accessors for transition edges
   inline TransIterator begin()
@@ -131,7 +178,7 @@ class State
 
   Transition* add_transition( State* next_s )
   {
-    Transition* trans = new Transition(next_s);
+    Transition* trans = new Transition(this, next_s);
     edges[next_s] = trans;
     return trans;
   }
@@ -148,39 +195,40 @@ class State
 };
 
 
+// Describe function
 class FunctionState : public State
 {
  public:
   int code;
   
  public:
-  FunctionState() { code = 0; }
+  FunctionState() 
+    { 
+      id = 0;
+      machine = NULL;
+      code = 0;
+    }
   
   FunctionState( int my_id )
     {
-      code = 0;
       id = my_id;
+      machine = NULL;
+      code = 0;
     }
   
   FunctionState( int my_id, StateMachine* m )
     {
-      code = 0;
       id = my_id;
       machine = m;
+      code = 0;
     }
   
-  // Virtual functions
-  bool equals(const State* other) const
+  // Implement virtual functions
+  bool less_than(const State* other) const
   {
-    return operator==((const FunctionState*)other);
+    return code < ((const FunctionState*)other)->code;
   }
-  
-  bool less_than( const State* other ) const
-  {
-    const FunctionState* fs_o = (const FunctionState*)other;
-    return code < fs_o->code;
-  }
-  
+    
   State* clone() const
   {
     FunctionState* new_s = new FunctionState(id);
@@ -188,26 +236,101 @@ class FunctionState : public State
     new_s->machine = machine;
     return new_s;
   }
-  
+
   string descriptor() const 
   {
     char buf[32];
     sprintf(buf, "%p", code);
     return string(buf);
   }
+
+  void set_core_data(int new_code)
+  {
+    code = new_code;
+  }
   
+  int get_core_data()
+  {
+    return code;
+  }
+    
+  // Own functions
   bool operator==(const FunctionState* fs_o) const
   {
     return fs_o->code == code;
   }
 };
 
+
+
+// Describe object
+class ObjectState : public State
+{
+ public:
+  // Describe the internal structure of object
+  int struct_d;
+
+ public:
+  ObjectState() 
+    { 
+      id = 0;
+      machine = NULL;
+      struct_d= 0; 
+    }
+  
+  ObjectState( int my_id )
+    {
+      id = my_id;
+      machine = NULL;
+      struct_d = 0;
+    }
+
+  // Implement virtual functions
+  bool less_than(const State* other) const
+  {
+    return struct_d < ((const ObjectState*)other)->struct_d;
+  }
+   
+  State* clone() const
+  {
+    ObjectState* new_s = new ObjectState;
+    new_s->struct_d = struct_d;
+    new_s->machine = machine;
+    return new_s;
+  }
+
+  string descriptor() const 
+  {
+    char buf[32];
+    sprintf(buf, "%p", struct_d);
+    return string(buf);
+  }
+
+  void set_core_data(int new_struct_d)
+  {
+    struct_d = new_struct_d;
+  }
+
+  int get_core_data()
+  {
+    return struct_d;
+  }
+
+  // Own functions
+  bool operator==(const ObjectState* os_o) const
+  {
+    return os_o->struct_d == struct_d;
+  }
+};
+
+
+// A state machine maintains a collection of states
 class StateMachine
 {
  private:
   typedef set<State*, State::state_ptr_cmp> StatesPool;
   
- protected:
+ public:
   // Record all the states belonging to this machine
   StatesPool states;
   // Map object/function instances to state
@@ -228,25 +351,13 @@ class StateMachine
   
  public:
   enum Mtype {
-    Function,
-    Object
+    TFunction,
+    TObject
   };
   
-  // Different state machine may have different additional actions
+  // Different machines may have different additional actions
   virtual State* insert_new_state(State* s) = 0;
-  
-  State* search_state(State* s)
-  {
-    StatesPool::iterator it = states.find(s);
-    
-    if ( it == states.end() ) {
-      s = insert_new_state(s);
-    }
-    else
-      s = *it;
-    
-    return s;
-  }
+  virtual Mtype type() = 0;
 
   void set_machine_name(const char* name)
   {
@@ -261,6 +372,20 @@ class StateMachine
   int size() 
   { 
     return states.size(); 
+  }
+
+  // Has the given state been included?
+  State* search_state(State* s)
+  {
+    StatesPool::iterator it = states.find(s);
+    
+    if ( it == states.end() ) {
+      s = insert_new_state(s);
+    }
+    else
+      s = *it;
+    
+    return s;
   }
 
   State* get_instance_pos(int d)
@@ -292,6 +417,8 @@ class StateMachine
   }
 };
 
+
+// Specialized state machine storing function states only
 class FunctionMachine : public StateMachine
 {
  public:
@@ -316,8 +443,8 @@ class FunctionMachine : public StateMachine
 
   State* insert_new_state(State* s)
   {
+    // Create a new state
     FunctionState* fs = (FunctionState*)s->clone();
-    // Update the id
     fs->id = states.size();
     states.insert(fs);
     
@@ -338,6 +465,8 @@ class FunctionMachine : public StateMachine
     return fs;
   }
 
+  Mtype type() { return TFunction; }
+
   void set_opt_state( bool allow, const char* msg )
   {
     allow_opt = allow;
@@ -345,20 +474,28 @@ class FunctionMachine : public StateMachine
   }
 };
 
+
+// Specialized machine for object states
 class ObjectMachine : public StateMachine
 {
  public:
   ObjectMachine()
     {
-      // To fix.
-      start = new FunctionState(0);
+      start = new ObjectState(0);
       states.insert(start);
     }
 
   State* insert_new_state(State* s)
   {
-    return s;
+    // Duplicate
+    ObjectState* os = (ObjectState*)s->clone();
+    os->id = states.size();
+    states.insert(os);
+
+    return os;
   }
+
+  Mtype type() { return TObject; }
 };
 
 

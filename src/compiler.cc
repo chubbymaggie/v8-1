@@ -928,6 +928,19 @@ static bool InstallCodeFromOptimizedCodeMap(CompilationInfo* info) {
       }
       // Caching of optimized code enabled and optimized code found.
       shared->InstallFromOptimizedCodeMap(*function, index);
+
+	  // We capture the hitting the optimization cache
+	  if ( FLAG_trace_function_internals ) {
+		Code* code = function->code();
+		LOG(function->GetIsolate(),
+			EmitFunctionEvent(
+			Logger::GenOptCode,
+			*function,
+			code,
+			*shared)
+		  );
+	  }
+
       return true;
     }
   }
@@ -1014,20 +1027,6 @@ void Compiler::RecompileParallel(Handle<JSFunction> closure) {
     CompilationHandleScope handle_scope(*info);
 
     if (InstallCodeFromOptimizedCodeMap(*info)) {
-	  // Eearly exit for parallel optimization path
-	  // We must capture it
-	  if ( FLAG_trace_function_internals ) {
-		Code* code = closure->code();
-		SharedFunctionInfo* shared = closure->shared();
-		LOG(closure->GetIsolate(),
-			EmitFunctionEvent(
-			Logger::GenOptCode,
-			*closure,
-			code,
-			shared)
-		  );
-	  }
-
       return;
     }
 

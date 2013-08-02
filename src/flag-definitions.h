@@ -744,6 +744,7 @@ DEFINE_implication(log_internal_timer_events, prof)
 
 DEFINE_bool(trace_object_internals, false, "trace internals actions applied to objects")
 DEFINE_bool(trace_function_internals, false, "trace internals actions applied to functions")
+DEFINE_bool(trace_internals_start, false, "start tracing internals at beginning of VM")
 
 //
 // Disassembler only flags

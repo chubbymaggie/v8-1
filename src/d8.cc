@@ -1478,9 +1478,6 @@ bool Shell::SetOptions(int argc, char* argv[]) {
 
 
 int Shell::RunMain(Isolate* isolate, int argc, char* argv[]) {
-  // We use this counter to distinguish the snapshot functions and immediate functions
-  i::JSFunction::id_counter = i::JSFunction::snapshot_limit;
-
 #ifndef V8_SHARED
   i::List<i::Thread*> threads(1);
   if (options.parallel_files != NULL) {

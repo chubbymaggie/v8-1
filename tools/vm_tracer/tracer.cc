@@ -43,11 +43,21 @@ EventHandler handlers[] = {
 
 FunctionMachine::CodeStatesMap* FunctionMachine::code_in;
 
-// From machine ID to machine structure
-map<int, StateMachine*> machines;
-// From function address to function id
-map<int, int> functions;
+// From shared to machine structure
+map<int, FunctionMachine*> f_machines;
+// From function address to internal id
+// This mapping can avoid large impact made by GC code move
+map<int, int> func2id;
+// From function id to machine
+map<int, FunctionMachine*> fid2mac;
+
+// Maps for objects
+map<int, ObjectMachine*> o_machines;
+map<int, int> obj2id;
+map<int, ObjectMachine*> oid2mac;
+
 int func_id_counter = 0;
+int obj_id_counter = 0;
 
 
 static
@@ -63,9 +73,60 @@ void clean_machines()
 }
 
 
+// Find machine from shared code
+StateMachine* 
+find_machine(int m_sig, StateMachine::Mtype type)
+{
+  StateMachine* sm = NULL;
+
+  if ( type == StateMachine::TFunction ) {
+    map<int, FunctionMachine*>::iterator i_fsm = f_machines.find(m_sig);
+
+    if ( i_fsm != f_machines.end() ) {
+      sm = i_fsm->second;
+    }
+    else{
+      sm = new FunctionMachine;
+      f_machines[m_sig] = (FunctionMachine*)sm;
+    }
+  }
+  else {
+    map<int, ObjectMachine*>::iterator i_osm = o_machines.find(m_sig);
+    
+    if ( i_osm != o_machines.end() )
+      sm = i_osm->second;
+    else {
+      sm = new ObjectMachine;
+      o_machines[m_sig] = (ObjectMachine*)sm;
+    }
+  }
+  
+  return sm;
+}
+
+
+// Get function id
+int
+lookup_id(int addr, StateMachine::Mtype type)
+{
+  map<int, int>::iterator it;
+
+  if ( type == StateMachine::TFunction ) {
+    it = func2id.find(addr);
+    if ( it == func2id.end() ) return -1;
+  }
+  else {
+    it = obj2id.find(addr);
+    if ( it == obj2id.end() ) return -1;
+  }
+
+  return it->second;
+}
+
+
 // Create a state transition
-State* 
-transfer(StateMachine* fsm, 
+Transition* 
+transfer(StateMachine* sm, 
 	 State* cur_s, State* next_s, 
 	 const char* desc)
 {
@@ -77,116 +138,113 @@ transfer(StateMachine* fsm,
   if ( trans == NULL ) {
     // Not exist
     // We try to search and add to the state machine pool
-    next_s = fsm->search_state(next_s);
+    next_s = sm->search_state(next_s);
     trans = cur_s->add_transition(next_s);
   }
-  else {
-    next_s = trans->target;
-  }
   
+  // Update transition
   trans->count++;
   trans->insert_reason(desc);
-  return next_s;
+  return trans;
 }
 
 
-StateMachine* 
-find_machine(int m_sig, StateMachine::Mtype type)
+template<class TS, class TM> 
+Transition* morph( TM* sm,
+		   int id, int core_d, 
+		   const char* trans_desc )
 {
-  StateMachine* fsm = NULL;
-  map<int, StateMachine*>::iterator i_fsm = machines.find(m_sig);
+  static TS state_t;
+  State *cur_s;
+  Transition* trans;
 
-  if ( i_fsm != machines.end() ) {
-    fsm = i_fsm->second;
-  }
-  else{
-    if ( type == StateMachine::Function )
-      fsm = new FunctionMachine;
-    else
-      fsm = new ObjectMachine;
-    
-    machines[m_sig] = fsm;
-  }
   
-  return fsm;
-}
-
-int
-get_function_id(int f_addr)
-{
-  map<int, int>::iterator it = functions.find(f_addr);
-  if ( it == functions.end() ) {
-    // Never seen this function before
-    return -1;
-  }
-
-  return it->second;
-}
-
-
-void
-replace_code( StateMachine* fsm,
-	      int func, int code, const char* trans_desc)
-{
-  static FunctionState fstate_t(0);
-  FunctionState *cur_s, *next_s;
+  // Obtain current position of this function
+  cur_s = sm->get_instance_pos(id);
   
-  int func_id = get_function_id(func);
-
-  if ( func_id != -1 ) {
-    // Obtain current position of this function
-    cur_s = (FunctionState*)fsm->get_instance_pos(func_id);
-    
-    // Build the target state
-    fstate_t.code = (code == -1 ? cur_s->code : code);
-    fstate_t.machine = fsm;
-
-    // Transfer state
-    next_s = 
-      (FunctionState*)transfer( fsm, cur_s, &fstate_t, trans_desc );
-
-    // Renew the position of this function
-    fsm->instance_walk_to(func_id, next_s);
-  }
+  // Build the target state
+  if ( core_d == -1 ) core_d = cur_s->get_core_data();
+  state_t.set_core_data(core_d);
+  state_t.machine = sm;
+  
+  // Transfer state
+  trans = transfer( sm, cur_s, &state_t, trans_desc );
+  
+  // Renew the position of this instance
+  sm->instance_walk_to(id, trans->target);
+  
+  return trans;
 }
+
 
 
 // ---------------------Define hanlder prototypes--------------------
-static void 
-create_object(FILE*)
+static void
+create_obj_common(FILE* file, const char* msg)
 {
-  // To do..
+  int o_addr;
+  int alloc_sig;
+  int struct_d;
+  char name_buf[128];
+
+  fscanf( file, "%p %p %p %s", 
+	  &o_addr, &alloc_sig, &struct_d, name_buf );
+  
+  ObjectMachine* osm = (ObjectMachine*)
+    find_machine( alloc_sig, StateMachine::TObject);
+  
+  if ( osm->has_no_name() )
+    osm->set_machine_name( name_buf );
+
+  int o_id = obj_id_counter++;
+  obj2id[o_addr] = o_id;
+  oid2mac[o_id] = osm;
+  
+  morph<ObjectState>(osm, o_id, struct_d, msg );
+}
+ 
+static void 
+create_object(FILE* file)
+{
+  create_obj_common(file, "NewObj");
+}
+
+
+static void 
+create_array(FILE* file)
+{
+  create_obj_common(file, "NewArray");
 }
 
 
 static void
 create_function(FILE* file)
 {
+  int f_addr;
   int shared;
-  int func;
   int code;
   char name_buf[256];
 
 
   fscanf( file, "%p %p %p %[^\t\n]", 
-	  &shared, &func, &code, 
+	  &f_addr, &shared, &code, 
 	  name_buf );
-  
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
+
+  // Find or construct the state machine
+  FunctionMachine* fsm = (FunctionMachine*)
+    find_machine(shared, StateMachine::TFunction);
+
   if ( fsm->has_no_name() ) {
     fsm->set_machine_name( name_buf );
   }
-
-  functions[func] = func_id_counter++;
-  replace_code(fsm, func, code, "New");
   
-  if ( slice_sig == shared ) {
-    printf( "%d %p %p %p %s",
-	    InternalEvent::CreateFunction,
-	    shared, func, code, name_buf );
-  }
+  // Install a new function instance
+  int f_id = func_id_counter++;
+  func2id[f_addr] = f_id;
+  fid2mac[f_id] = fsm;
+  morph<FunctionState>(fsm, f_id, code, "New");  
 }
+
 
 static void
 gc_move_function(FILE* file)
@@ -194,18 +252,41 @@ gc_move_function(FILE* file)
   int from, to;
   fscanf( file, "%p %p", &from, &to );
   
-  // Replace the function to function_ID map
-  int id = 0;
-  map<int, int>::iterator it = functions.find(from);
-  if ( it == functions.end() )
-    id = func_id_counter++;
-  else {
-    id = it->second;
-    functions.erase(it);
+  // Obtain the function id
+  map<int, int>::iterator it = func2id.find(from);
+  if ( it == func2id.end() ) return;
+  int f_id = it->second;
+  
+  // Remap  
+  func2id.erase(it);   
+  func2id[to] = f_id;
+}
+
+
+static void
+gc_move_object(FILE* file)
+{
+  int from, to;
+  fscanf( file, "%p %p", &from, &to );
+  
+  // Update object to id map
+  map<int, int>::iterator it = obj2id.find(from);
+  if ( it != obj2id.end() ) {
+    int o_id = it->second;
+    obj2id.erase(it);   
+    obj2id[to] = o_id;
   }
   
-  functions[to] = id;
+  
+  // Some objects are used as alloction signature
+  map<int, ObjectMachine*>::iterator i_osm = o_machines.find(from);
+  if ( i_osm != o_machines.end() ) {
+    ObjectMachine* osm = i_osm->second;
+    o_machines.erase(i_osm);
+    o_machines[to] = osm;
+  }
 }
+
 
 static void
 gc_move_shared(FILE* file)
@@ -213,11 +294,21 @@ gc_move_shared(FILE* file)
   int from, to;
   fscanf( file, "%p %p", &from, &to );
 
-  map<int, StateMachine*>::iterator i_fsm = machines.find(from);  
-  if ( i_fsm != machines.end() ) {
-    StateMachine* fsm = i_fsm->second;
-    machines.erase(i_fsm);
-    machines[to] = fsm;
+  // Update functioin machine
+  map<int, FunctionMachine*>::iterator i_fsm = f_machines.find(from);  
+  if ( i_fsm != f_machines.end() ) {
+    FunctionMachine* fsm = i_fsm->second;
+    f_machines.erase(i_fsm);
+    f_machines[to] = fsm;
+  }
+
+
+  // Update the object machine that use sharedinfo as signature
+  map<int, ObjectMachine*>::iterator i_osm = o_machines.find(from);
+  if ( i_osm != o_machines.end() ) {
+    ObjectMachine* osm = i_osm->second;
+    o_machines.erase(i_osm);
+    o_machines[to] = osm;
   }
 }
 
@@ -256,7 +347,7 @@ gc_move_code(FILE* file)
 
     new_states->push_back((FunctionState*)new_fs);
   }
-
+  
   //code_in->erase(it);
   (*code_in)[new_code] = new_states;
 }
@@ -270,7 +361,18 @@ change_type(FILE* file)
 static void
 expand_array(FILE* file)
 {
-  // To-do
+  int o_addr;
+  int bytes;
+
+  fscanf( file, "%p %d", 
+	  &o_addr, &bytes );
+  
+  int o_id = lookup_id(o_addr, StateMachine::TObject);
+  if ( o_id != -1 ) {
+    ObjectMachine* osm = oid2mac[o_id];
+    Transition* trans = morph<ObjectState>( osm, o_id, -1, NULL );
+    trans->insert_reason("Expand", bytes);
+  }
 }
 
 static void
@@ -298,151 +400,229 @@ array_ops_pure(FILE* file)
 }
 
 static void
-install_code(FILE* file)
-{
-  int shared, func, code;
-  fscanf( file, "%p %p %p",
-          &shared, &func, &code );
-  
-  StateMachine* fsm = find_machine(shared,
-                                   StateMachine::Function);
-  replace_code( fsm, func, code, "Install" );
-}
-
-static void
 gen_full_code(FILE* file)
 {
-  int shared, func, code;
-  fscanf( file, "%p %p %p", 
-	  &shared, &func, &code );
+  int f_addr, code;
+  fscanf( file, "%p %p", 
+	  &f_addr, &code );
   
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
-  replace_code( fsm, func, code, "Full" );
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = fid2mac[f_id];
+    morph<FunctionState>( fsm, f_id, code, "Full" );
+  }
 }
 
 static void
 gen_full_deopt(FILE* file)
 {
-  int shared, func, old_code, new_code;
-  fscanf( file, "%p %p %p %p", 
-	  &shared, &func, 
-	  &old_code, &new_code );
+  int f_addr, new_code;
+  fscanf( file, "%p %p", 
+	  &f_addr, 
+	  &new_code );
   
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
-  replace_code( fsm, func, new_code, "AddDeopt" );
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = fid2mac[f_id];
+    morph<FunctionState>( fsm, f_id, new_code, "AddDeopt" );
+  }
 }
 
 static void
 gen_opt_code(FILE* file)
 {
-  int shared, func, code;
+  int f_addr, code;
   char opt_buf[128];
   
   sprintf( opt_buf, "Opt: " );
-  fscanf( file, "%p %p %p %[^\t\n]", 
-	  &shared, &func, &code, 
+  fscanf( file, "%p %p %[^\t\n]", 
+	  &f_addr, &code, 
 	  opt_buf + strlen(opt_buf) );
 
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
-  replace_code( fsm, func, code, opt_buf );
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = fid2mac[f_id];
+    morph<FunctionState>( fsm, f_id, code, opt_buf );
+  }
 }
 
 static void
 gen_osr_code(FILE* file)
 {
-  int shared, func, code;
+  int f_addr, code;
   char opt_buf[128];
 
   sprintf( opt_buf, "Osr: " );
-  fscanf( file, "%p %p %p %[^\t\n]",
-          &shared, &func, &code, opt_buf + strlen(opt_buf) );
+  fscanf( file, "%p %p %[^\t\n]",
+          &f_addr, &code, opt_buf + strlen(opt_buf) );
 
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
-  replace_code( fsm, func, code, opt_buf );
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = fid2mac[f_id];
+    morph<FunctionState>( fsm, f_id, code, opt_buf );
+  }
 }
 
 static void
 disable_opt(FILE* file)
 {
-  int shared, func;
+  int shared, f_addr;
   char opt_buf[128];
 
   fscanf( file, "%p %p %[^\t\n]",
-          &shared, &func, opt_buf );
+          &f_addr, &shared, opt_buf );
 
   FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Function);
-  fsm->set_opt_state( false, opt_buf );
+    (FunctionMachine*)find_machine(shared, StateMachine::TFunction);
+  if ( fsm != NULL )
+    fsm->set_opt_state( false, opt_buf );
 }
 
 static void
 reenable_opt(FILE* file)
 {
-  int shared, func;
+  int shared, f_addr;
   char opt_buf[128];
 
   fscanf( file, "%p %p %[^\t\n]",
-          &shared, &func, opt_buf );
+          &f_addr, &shared, opt_buf );
 
   FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Function);
-  fsm->set_opt_state( true, opt_buf );
+    (FunctionMachine*)find_machine(shared, StateMachine::TFunction);
+  if ( fsm != NULL )
+    fsm->set_opt_state( true, opt_buf );
 }
 
 static void
 gen_opt_failed(FILE* file)
 {
-  int shared, func;
+  int f_addr, new_code;
   char opt_buf[128];
 
   sprintf( opt_buf, "OptFailed: " );
   int last_pos = strlen(opt_buf);
-
+  
   fscanf( file, "%p %p %[^\t\n]",
-          &shared, &func, opt_buf + last_pos );
+          &f_addr, 
+	  &new_code, opt_buf + last_pos );
 
-  FunctionMachine* fsm = 
-    (FunctionMachine*)find_machine(shared, StateMachine::Function);
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = (FunctionMachine*)fid2mac[f_id];
+    
+    if ( opt_buf[last_pos] == '-' &&
+	 opt_buf[last_pos+1] == '\0' ) {
+      // Reuse the disable message
+      sprintf( opt_buf+last_pos, "%s", fsm->optMsg.c_str() );
+    }
 
-  if ( opt_buf[last_pos] == '-' &&
-       opt_buf[last_pos+1] == '\0' ) {
-    // Reuse the disable message
-    sprintf( opt_buf+last_pos, "%s", fsm->optMsg.c_str() );
+    morph<FunctionState>( fsm, f_id, new_code, opt_buf );
   }
-
-  replace_code( fsm, func, -1, opt_buf );
 }
 
 static void
 deopt_code(FILE* file)
 {
-  int shared, func, code;
+  int f_addr, old_code, new_code;
   char opt_buf[128];
+  char deopt_buf[128];
   
-  sprintf( opt_buf, "Deopt: " );
-  fscanf( file, "%p %p %p %s", 
-	  &shared, &func, &code, 
-	  opt_buf + strlen(opt_buf) );
+  sprintf( opt_buf, "Opt: ");
+  sprintf( deopt_buf, "Deopt: " );
+  
+  fscanf( file, "%p %p %s %p %s", 
+	  &f_addr, 
+	  &old_code, opt_buf + strlen(opt_buf),
+	  &new_code, deopt_buf + strlen(deopt_buf) );
+  
+  int f_id = lookup_id(f_addr, StateMachine::TFunction);
+  if ( f_id != -1 ) {
+    FunctionMachine* fsm = fid2mac[f_id];
 
-  StateMachine* fsm = find_machine(shared,
-				   StateMachine::Function);
-  replace_code( fsm, func, code, opt_buf );
+    // We first decide if the old_code is current code
+    FunctionState* cur_s = (FunctionState*)fsm->get_instance_pos(f_id);
+    if ( cur_s->code != old_code )
+      morph<FunctionState>( fsm, f_id, old_code, opt_buf );
+    
+    // Then, we transfer to the new_code
+    morph<FunctionState>(fsm, f_id, new_code, deopt_buf);
+  }
 }
 
 
 // -----------------system functions---------------
 static void
+draw_machine(FILE* file, StateMachine* sm, int m_id)
+{
+  queue<State*> bfsQ;
+  set<State*> visited;
+  
+  State* init_state = sm->start;
+  fprintf(file, "digraph G%d {\n", m_id);
+  
+  // Go over the state machine
+  visited.clear();
+  visited.insert(init_state);
+  bfsQ.push(init_state);
+  
+  while ( !bfsQ.empty() ) {
+    State* cur_s = bfsQ.front();
+    bfsQ.pop();
+    
+    // We first generate the node description
+    int id;
+    
+    if ( cur_s == init_state ) {
+      id = 0;
+      fprintf(file, 
+	      "\t0 [shape=ellipse, peripheries=2, label=\"%s\"];\n",
+	      sm->m_name.c_str() );
+    }
+    else {
+      id = cur_s->id;
+	fprintf(file, 
+		"\t%d [shape=box, label=\"%s\"];\n", 
+		id, 
+		cur_s->descriptor().c_str());
+    }
+    
+    // We draw the transition edges
+    State::TransIterator it = cur_s->begin();
+    State::TransIterator end = cur_s->end();
+    for ( ;
+	  it != end; ++it ) {
+      Transition* trans = it->second;
+      State* next_s = trans->target;
+      if ( visited.find(next_s) == visited.end() ) {
+	bfsQ.push(next_s);
+	visited.insert(next_s);
+      }
+      
+      // Generate the transition descriptive string
+      string final;
+      trans->merge_reasons(final);
+      const char* desc = NULL;
+      if ( trans->count == 1 )
+	desc = "\t%d -> %d [label=\"%s\"];\n";
+      else
+	desc = "\t%d -> %d [label=\"%s//%dX\"];\n";
+      
+      fprintf(file, 
+	      desc,
+	      id, next_s->id, 
+	      final.c_str(),
+	      trans->count);
+    }
+  }
+  
+  fprintf(file, "}\n\n");
+}
+
+static void
 output_graphviz()
 {
   FILE* file;
   int n_graph;
-  int n_states;
-  queue<State*> bfsQ;
-  set<State*> visited;
 
   file = fopen(visual_file, "w");
   if ( file == NULL ) {
@@ -450,78 +630,26 @@ output_graphviz()
     return;
   }
 
-  //printf( "count machines = %d\n", machines.size() );
-
-  // Do BFS to draw graph
+  // Do BFS to draw graphs
   n_graph = 0;
-  for ( map<int,StateMachine*>::iterator it = machines.begin();
-	it != machines.end();
+
+  for ( map<int, FunctionMachine*>::iterator it = f_machines.begin();
+	it != f_machines.end();
 	++it ) {
-    StateMachine* fsm = it->second;
+    FunctionMachine* fsm = it->second;
     if ( fsm->size() < states_count_limit ) continue;
     if ( fsm->has_no_name() ) continue;
-
-    State* init_state = fsm->start;
-    fprintf(file, "digraph G%d {\n", n_graph);
-    ++n_graph;
     
-    // Go over the state machine
-    visited.clear();
-    visited.insert(init_state);
-    bfsQ.push(init_state);
-
-    while ( !bfsQ.empty() ) {
-      State* cur_s = bfsQ.front();
-      bfsQ.pop();
-      
-      // We first generate the node description
-      int id;
-      
-      if ( cur_s == init_state ) {
-	id = 0;
-	fprintf(file, 
-		"\t0 [shape=ellipse, peripheries=2, label=\"%s\"];\n",
-		fsm->m_name.c_str() );
-      }
-      else {
-	id = cur_s->id;
-	fprintf(file, 
-		"\t%d [shape=box, label=\"%s\"];\n", 
-		id, 
-		cur_s->descriptor().c_str());
-      }
-      
-      // We draw the transition edges
-      State::TransIterator it = cur_s->begin();
-      State::TransIterator end = cur_s->end();
-      for ( ;
-	    it != end; ++it ) {
-	Transition* trans = it->second;
-	State* next_s = trans->target;
-	if ( visited.find(next_s) == visited.end() ) {
-	  bfsQ.push(next_s);
-	  visited.insert(next_s);
-	}
-	
-	// Generate the transition descriptive string
-	string* reason = trans->merge_reasons();
-	const char* desc = NULL;
-	if ( trans->count == 1 )
-	  desc = "\t%d -> %d [label=\"%s\"];\n";
-	else
-	  desc = "\t%d -> %d [label=\"%s//%dX\"];\n";
-
-	fprintf(file, 
-		desc,
-		id, next_s->id, 
-		reason->c_str(),
-		trans->count);
-
-	delete reason;
-      }
-    }
-
-    fprintf(file, "}\n\n");
+    draw_machine( file, fsm, n_graph++ );
+  }
+  
+  for ( map<int, ObjectMachine*>::iterator it = o_machines.begin();
+	it != o_machines.end();
+	++it ) {
+    ObjectMachine* osm = it->second;
+    if ( osm->size() < states_count_limit ) continue;
+    
+    draw_machine( file, osm, n_graph++ );
   }
   
   fclose(file);
