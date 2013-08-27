@@ -1261,7 +1261,8 @@ void FullCodeGenerator::EmitNewClosure(Handle<SharedFunctionInfo> info,
   // flag, we need to use the runtime function so that the new function
   // we are creating here gets a chance to have its code optimized and
   // doesn't just get a copy of the existing unoptimized code.
-  if (!FLAG_always_opt &&
+  if (!FLAG_trace_internals &&
+	  !FLAG_always_opt &&
       !FLAG_prepare_always_opt &&
       !pretenure &&
       scope()->is_function_scope() &&
@@ -1595,7 +1596,7 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
     __ push(Immediate(constant_properties));
     __ push(Immediate(Smi::FromInt(flags)));
     __ CallRuntime(Runtime::kCreateObjectLiteral, 4);
-  } else if (Serializer::enabled() || flags != ObjectLiteral::kFastElements ||
+  } if (FLAG_trace_internals || Serializer::enabled() || flags != ObjectLiteral::kFastElements ||
       properties_count > FastCloneShallowObjectStub::kMaximumClonedProperties) {
     __ mov(edi, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
     __ push(FieldOperand(edi, JSFunction::kLiteralsOffset));
@@ -1618,7 +1619,7 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
   bool result_saved = false;
 
   // We log the information before unkonwn operations change eax
-  if ( FLAG_trace_object_internals ) {
+  if ( FLAG_trace_internals ) {
 	// We first keep a copy of object information
 	__ push(eax);
 	result_saved = true;
@@ -1626,16 +1627,13 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
 	// The pointer of newly generated JSObject is stored in eax
 	__ push(eax);
 	// Obtain the enclosing function
-	// We decide in runtime function if this object is kept
 	__ mov(ebx, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
 	__ push(ebx);
-	// Push the event type
-	__ push(Immediate(Smi::FromInt(Logger::CreateObject)));
 	// Push the index of boilerplate
 	__ push(Immediate(Smi::FromInt(expr->literal_index())));
 
 	// Call runtime to generate log message
-	__ CallRuntime(Runtime::kLogObjectCreate, 4);
+	__ CallRuntime(Runtime::kLogObjectCreate, 3);
   }
 
   // Mark all computed expressions that are bound to a key that
@@ -1766,14 +1764,15 @@ void FullCodeGenerator::VisitArrayLiteral(ArrayLiteral* expr) {
     __ push(Immediate(Smi::FromInt(expr->literal_index())));
     __ push(Immediate(constant_elements));
     __ CallRuntime(Runtime::kCreateArrayLiteral, 3);
-  } else if (Serializer::enabled() ||
+  } if (FLAG_trace_internals || Serializer::enabled() ||
       length > FastCloneShallowArrayStub::kMaximumClonedLength) {
     __ mov(ebx, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
     __ push(FieldOperand(ebx, JSFunction::kLiteralsOffset));
     __ push(Immediate(Smi::FromInt(expr->literal_index())));
     __ push(Immediate(constant_elements));
     __ CallRuntime(Runtime::kCreateArrayLiteralShallow, 3);
-  } else {
+  } 
+  else {
     ASSERT(IsFastSmiOrObjectElementsKind(constant_elements_kind) ||
            FLAG_smi_only_arrays);
     FastCloneShallowArrayStub::Mode mode =
@@ -1799,7 +1798,7 @@ void FullCodeGenerator::VisitArrayLiteral(ArrayLiteral* expr) {
   bool result_saved = false;  // Is the result saved to the stack?
 
   // We log the information before unkonwn operations change eax
-  if ( FLAG_trace_object_internals ) {
+  if ( FLAG_trace_internals ) {
 	// We first keep a copy of array information
 	__ push(eax);
     __ push(Immediate(Smi::FromInt(expr->literal_index())));
@@ -1808,16 +1807,13 @@ void FullCodeGenerator::VisitArrayLiteral(ArrayLiteral* expr) {
 	// The pointer of newly generated JSArray is stored in eax
 	__ push(eax);
 	// Obtain the enclosing function
-	// We decide in runtime function if this object is kept
 	__ mov(ebx, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
 	__ push(ebx);
-	// Push the event type
-	__ push(Immediate(Smi::FromInt(Logger::CreateArray)));
 	// Push the index of boilerplate
 	__ push(Immediate(Smi::FromInt(expr->literal_index())));
 
 	// Call runtime to generate log message
-	__ CallRuntime(Runtime::kLogObjectCreate, 4);
+	__ CallRuntime(Runtime::kLogObjectCreate, 3);
   }
 
   // Emit code to evaluate all the non-constant subexpressions and to store
@@ -2859,6 +2855,11 @@ void FullCodeGenerator::VisitCallNew(CallNew* expr) {
   // Load function and argument count into edi and eax.
   __ Set(eax, Immediate(arg_count));
   __ mov(edi, Operand(esp, arg_count * kPointerSize));
+
+  /*if ( FLAG_trace_internals ) {
+	__ mov(ebx, Immediate((Address)isolate()->get_callnew_pair()));
+	__ mov(Operand(ebx, 0), Immediate(expr->position()));
+  }*/
 
   // Record call targets in unoptimized code.
   Handle<Object> uninitialized =

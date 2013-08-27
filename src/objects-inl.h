@@ -1209,14 +1209,14 @@ Map* HeapObject::map() {
 }
 
 
-void HeapObject::set_map(Map* value) {
-  set_map_word(MapWord::FromMap(value));
-  if (value != NULL) {
-    // TODO(1600) We are passing NULL as a slot because maps can never be on
-    // evacuation candidate.
-    value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
-  }
-}
+//void HeapObject::set_map(Map* value) {
+//  set_map_word(MapWord::FromMap(value));
+//  if (value != NULL) {
+//    // TODO(1600) We are passing NULL as a slot because maps can never be on
+//    // evacuation candidate.
+//    value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
+//  }
+//}
 
 
 // Unsafe accessor omitting write barrier.
@@ -3657,11 +3657,11 @@ bool Map::CanBeDeprecated() {
 }
 
 
-void Map::NotifyLeafMapLayoutChange() {
-  dependent_code()->DeoptimizeDependentCodeGroup(
-      GetIsolate(),
-      DependentCode::kPrototypeCheckGroup);
-}
+//void Map::NotifyLeafMapLayoutChange() {
+//  dependent_code()->DeoptimizeDependentCodeGroup(
+//      GetIsolate(),
+//      DependentCode::kPrototypeCheckGroup);
+//}
 
 
 bool Map::CanOmitPrototypeChecks() {
@@ -4386,7 +4386,6 @@ ACCESSORS(Map, constructor, Object, kConstructorOffset)
 
 ACCESSORS(JSFunction, shared, SharedFunctionInfo, kSharedFunctionInfoOffset)
 ACCESSORS(JSFunction, literals_or_bindings, FixedArray, kLiteralsOffset)
-//LONG_ACCESSORS(JSFunction, functionID, kFunctionID)
 ACCESSORS(JSFunction, next_function_link, Object, kNextFunctionLinkOffset)
 
 ACCESSORS(GlobalObject, builtins, JSBuiltinsObject, kBuiltinsOffset)
@@ -4868,7 +4867,7 @@ void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
     code()->set_optimizable(true);
   }
 
-  if ( FLAG_trace_function_internals ) {
+  if ( FLAG_trace_internals ) {
 	Code* code = this->code();
 	LOG( GetIsolate(),
 		  EmitFunctionEvent(
@@ -4932,24 +4931,21 @@ Code* JSFunction::code() {
 
 void JSFunction::set_code(Code* value) {
   ASSERT(!HEAP->InNewSpace(value));
-
- // if ( FLAG_trace_function_internals &&
-	//	code() == NULL ) {
-	//// Perhaps this is the first time installing code
-	//LOG( GetIsolate(),
-	//	  EmitFunctionEvent(
-	//		Logger::InstallCode,
-	//		this, value, shared()
-	//	  )
-	//);
- // }
-
   Address entry = value->entry();
   WRITE_INTPTR_FIELD(this, kCodeEntryOffset, reinterpret_cast<intptr_t>(entry));
   GetHeap()->incremental_marking()->RecordWriteOfCodeEntry(
       this,
       HeapObject::RawField(this, kCodeEntryOffset),
       value);
+
+  /*if ( FLAG_trace_internals ) {
+	Isolate* isolate = GetIsolate();
+	LOG( isolate,
+	  EmitFunctionEvent(
+	  Logger::SetCode,
+		this, value, NULL)
+	);
+  }*/
 }
 
 

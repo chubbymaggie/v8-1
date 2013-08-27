@@ -666,16 +666,16 @@ Handle<JSFunction> Factory::NewFunctionFromSharedFunctionInfo(
   }
 
   // Log function create event
-  if ( FLAG_trace_function_internals ) {
-	Code* code = result->code();
-	LOG(isolate(),
-		EmitFunctionEvent(
-		Logger::CreateFunction,
-		*result,
-		code,		  // The code might be a lazy compile stub
-		*function_info)
-	);
-  }
+ // if ( FLAG_trace_internals ) {
+	//Code* code = result->code();
+	//LOG(isolate(),
+	//	EmitFunctionEvent(
+	//	Logger::CreateFunction,
+	//	*result,
+	//	code,		  // The code might be a lazy compile stub
+	//	*function_info)
+	//);
+ // }
 
   return result;
 }

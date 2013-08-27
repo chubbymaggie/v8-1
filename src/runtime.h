@@ -435,7 +435,9 @@ namespace internal {
   /* Logging */ \
   F(Log, 2, 1) \
   F(StartLogInternals, 0, 1) \
-  F(LogObjectCreate, 4, 1) \
+  F(LogObjectCreate, 3, 1) \
+  F(LogNewObject, 2, 1) \
+  F(LogNewArray, 1, 1) \
   F(LogFunctionCreate, 1, 1) \
   F(LogObjectManipulate, 3, 1) \
   /* ES5 */ \

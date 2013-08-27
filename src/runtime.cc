@@ -470,6 +470,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateObjectLiteral) {
     if (boilerplate.is_null()) return Failure::Exception();
     // Update the functions literal and return the boilerplate.
     literals->set(literals_index, *boilerplate);
+	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::CreateObjBoilerplate, JSObject::cast(*boilerplate), literals_index));
   }
   return JSObject::cast(*boilerplate)->DeepCopy(isolate);
 }
@@ -496,6 +497,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateObjectLiteralShallow) {
     if (boilerplate.is_null()) return Failure::Exception();
     // Update the functions literal and return the boilerplate.
     literals->set(literals_index, *boilerplate);
+	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::CreateObjBoilerplate, JSObject::cast(*boilerplate), literals_index));
   }
   return isolate->heap()->CopyJSObject(JSObject::cast(*boilerplate));
 }
@@ -517,6 +519,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateArrayLiteral) {
     if (boilerplate.is_null()) return Failure::Exception();
     // Update the functions literal and return the boilerplate.
     literals->set(literals_index, *boilerplate);
+	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::CreateArrayBoilerplate, JSArray::cast(*boilerplate), literals_index));
   }
   return JSObject::cast(*boilerplate)->DeepCopy(isolate);
 }
@@ -538,6 +541,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CreateArrayLiteralShallow) {
     if (boilerplate.is_null()) return Failure::Exception();
     // Update the functions literal and return the boilerplate.
     literals->set(literals_index, *boilerplate);
+	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::CreateArrayBoilerplate, JSArray::cast(*boilerplate), literals_index));
   }
   if (JSObject::cast(*boilerplate)->elements()->map() ==
       isolate->heap()->fixed_cow_array_map()) {
@@ -4975,10 +4979,16 @@ MaybeObject* Runtime::SetObjectProperty(Isolate* isolate,
           value = number;
         }
       }
+	  /*if ( name->IsString() &&
+		FLAG_trace_internals )
+		PrintF("Runtime Element %s is here.\n", *(String::cast(*name)->ToCString()));*/
       result = js_object->SetElement(
           index, *value, attr, strict_mode, true, set_mode);
     } else {
       if (name->IsString()) Handle<String>::cast(name)->TryFlatten();
+	  /*if ( name->IsString() &&
+		FLAG_trace_internals )
+		PrintF("Runtime Property %s is here.\n", *(String::cast(*name)->ToCString()));*/
       result = js_object->SetProperty(*name, *value, attr, strict_mode);
     }
     if (result->IsFailure()) return result;
@@ -7770,6 +7780,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NewClosure) {
       isolate->factory()->NewFunctionFromSharedFunctionInfo(shared,
                                                             context,
                                                             pretenure_flag);
+  // We do not log function create event here because it is logged in NewFuncFromShared... call
   return *result;
 }
 
@@ -8016,15 +8027,15 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_NewObject) {
   isolate->counters()->constructed_objects()->Increment();
   isolate->counters()->constructed_objects_runtime()->Increment();
 
-  if ( FLAG_trace_object_internals ) {
-	SharedFunctionInfo* shared = function->shared();
-	if ( !shared->native() ) {
-	  LOG( isolate,
-		EmitObjectEvent( Logger::CreateObject,
-		  *result,
-		  shared )
-	  );
-	}
+  if ( FLAG_trace_internals ) {
+	//HeapObject** callnew_info = isolate->get_callnew_pair();
+
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::CreateNewObject,
+	  *result,
+	  *function)
+	);
   }
 
   return *result;
@@ -8101,13 +8112,13 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 	Code* new_code = shared->code();
 	function->ReplaceCode(new_code);
 	// Perhaps the optimization channel is disabled
-	if ( FLAG_trace_function_internals ) {
+	if ( FLAG_trace_internals ) {
 	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
 			Logger::OptFailed,
 			*function,
 			new_code,
-			shared, "@5")
+			shared, NULL)
 		  );
 	}
     return new_code;
@@ -8119,9 +8130,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
                                    CLEAR_EXCEPTION)) {
 	// Generate optimized code successfully
 	Code* code = function->code();
-	if ( FLAG_trace_function_internals ) {
-	  //PrintF("------>Optimizing function = %s\n", shared->DebugName()->ToCString());
-	  //Flush();
+	/*if ( FLAG_trace_internals ) {
 	  LOG(function->GetIsolate(),
 		  EmitFunctionEvent(
 		  Logger::GenOptCode,
@@ -8129,7 +8138,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
 		  code,
 		  shared)
 		);
-	}
+	}*/
 
     return code;
   }
@@ -8139,6 +8148,16 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LazyRecompile) {
     function->PrintName();
     PrintF(": optimized compilation failed]\n");
   }
+
+  if ( FLAG_trace_internals ) {
+	  LOG(function->GetIsolate(),
+		  EmitFunctionEvent(
+		  Logger::OptFailed,
+		  *function,
+		  function->code(),
+		  shared)
+		);
+	}
 
   // Although optimizing failed, the uncompiled code can be compiled again with deoptimization support
   function->ReplaceCode(shared->code());
@@ -8168,8 +8187,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InstallRecompiledCode) {
   ASSERT(V8::UseCrankshaft() && FLAG_parallel_recompilation);
   isolate->optimizing_compiler_thread()->InstallOptimizedFunctions();
 
-  Code* code = function->code();
-  if ( FLAG_trace_function_internals ) {
+  // Optimized code is generated by parallel compiler
+  /*Code* code = function->code();
+  if ( FLAG_trace_internals ) {
 	SharedFunctionInfo* shared = function->shared();
 	bool opt_failed = (shared->code() == code ? true : false);
 	LOG(function->GetIsolate(),
@@ -8179,9 +8199,9 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InstallRecompiledCode) {
 		code,
 		shared)
 	  );
-  }
+  }*/
 
-  return code;
+  return function->code;
 }
 
 
@@ -8529,14 +8549,14 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_CompileForOnStackReplacement) {
     res = Smi::FromInt(-1);
   }
 
-  if ( FLAG_trace_function_internals ) {
+  if ( FLAG_trace_internals && !succeeded) {
 	Code* code = function->code();
 	LOG(function->GetIsolate(),
 		EmitFunctionEvent(
-		  (res->value() == -1 ? Logger::OptFailed : Logger::GenOsrCode),
+		Logger::OptFailed,
 		  *function,
 		  code,
-		  function->shared(), "@6")
+		  function->shared(), NULL)
 	  );
   }
 
@@ -10936,6 +10956,8 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetFrameDetails) {
 
   int count = 0;
   JavaScriptFrameIterator it(isolate, id);
+  JavaScriptFrame* js_frame = it.frame();
+
   for (; !it.done(); it.Advance()) {
     if (index < count + it.frame()->GetInlineCount()) break;
     count += it.frame()->GetInlineCount();
@@ -13754,7 +13776,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_Log) {
 RUNTIME_FUNCTION(MaybeObject*, Runtime_StartLogInternals) {
   SealHandleScope shs(isolate);
   ASSERT(args.length() == 0);
-  isolate->logger()->toggle_trace_internal(true);
+  FLAG_trace_internals = true;
   return isolate->heap()->undefined_value();
 }
 
@@ -13763,16 +13785,14 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LogFunctionCreate) {
   SealHandleScope shs(isolate);
   ASSERT(args.length() == 1);
   CONVERT_ARG_CHECKED(JSFunction, function, 0);
-  if ( !FLAG_trace_function_internals ) return function;
   DisallowHeapAllocation no_gc;
-  
-  Code* code = function->code();
+  if ( !FLAG_trace_internals ) return function;
+
   SharedFunctionInfo* shared = function->shared();
   LOG( isolate,
-	  	EmitFunctionEvent(
+	  	EmitObjectEvent(
 		Logger::CreateFunction,
 		function,
-		code,		  // The code might be a lazy compile stub
 		shared)
 	);
 
@@ -13780,57 +13800,89 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LogFunctionCreate) {
 }
 
 
-RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectCreate) {
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogNewObject) {
   SealHandleScope shs(isolate);
-  ASSERT(args.length() == 4);
-
-  CONVERT_ARG_CHECKED(JSObject, instance, 0);
-  CONVERT_ARG_CHECKED(JSFunction, base_func, 1);
-  if ( base_func->shared()->native() ) return instance;
-  CONVERT_SMI_ARG_CHECKED(event, 2);
-  CONVERT_SMI_ARG_CHECKED(index, 3);
+  ASSERT(args.length() == 2);
+  CONVERT_ARG_CHECKED(JSObject, object, 0);
+  CONVERT_ARG_CHECKED(JSFunction, constructor, 1);
   DisallowHeapAllocation no_gc;
 
-  FixedArray* boilerplates = base_func->literals();
-  JSObject* boilerplate = JSObject::cast( boilerplates->get(index) );
+  if ( FLAG_trace_internals ) {
+	LOG( isolate,
+	  EmitObjectEvent(
+	  Logger::CreateNewObject,
+	  object,
+	  constructor)
+	);
+  }
 
+  return object;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogNewArray) {
+  SealHandleScope shs(isolate);
+  ASSERT(args.length() == 1);
+  CONVERT_ARG_CHECKED(JSArray, array, 0);
+  DisallowHeapAllocation no_gc;
+
+  if ( FLAG_trace_internals ) {
+	//PrintF( "Get a new array\n" );
+
+	LOG( isolate,
+	  EmitObjectEvent(
+	  Logger::CreateNewArray,
+	  array,
+	  isolate->array_function()->shared())
+	);
+  }
+
+  return array;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectCreate) {
+  SealHandleScope shs(isolate);
+  ASSERT(args.length() == 3);
+  CONVERT_ARG_CHECKED(JSObject, instance, 0);
+  CONVERT_ARG_CHECKED(JSFunction, def_function, 1);
+  CONVERT_SMI_ARG_CHECKED(index, 2);
+  DisallowHeapAllocation no_gc;
+  if ( !FLAG_trace_internals ) return instance;
+
+  Logger::InternalEvent event = (instance->IsJSArray() ? Logger::CreateArrayLiteral : Logger::CreateObjectLiteral);
+  FixedArray* boilerplates = def_function->literals();
+  HeapObject* constructor = HeapObject::cast( boilerplates->get(index) );
+  
   LOG( isolate,
 	  	EmitObjectEvent(
-		(Logger::InternalEvent)event,
+		event,
 		instance,
-		boilerplate,
-		base_func, index)
+		constructor,
+		index)
 	);
   
   return instance;
-  //return isolate->heap()->undefined_value();
 }
 
 
 RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectManipulate) {
   SealHandleScope shs(isolate);
   DisallowHeapAllocation no_gc;
+  ASSERT(args.length() == 3);
   CONVERT_SMI_ARG_CHECKED(event, 0);
   CONVERT_ARG_CHECKED(JSObject, instance, 1);
-  
-  if ( event == Logger::ExpandArray ) {
-	CONVERT_SMI_ARG_CHECKED(old_capacity, 2);
-	LOG( isolate,
-	  	  EmitObjectEvent(
-		  Logger::ExpandArray,
-		  instance,
-		  NULL, old_capacity)
-	);
-  }
-  else {
-	LOG( isolate,
-	  		EmitObjectEvent(
-			(Logger::InternalEvent)event,
-			instance,
-			NULL)
-	  );
-  }
+  CONVERT_ARG_CHECKED(Map, old_map, 2);
 
+  if ( !FLAG_trace_internals ) return instance;
+
+  LOG( isolate,
+	  	EmitObjectEvent(
+		(Logger::InternalEvent)event,
+		instance, 
+		old_map) 
+  );
+  
   return instance;
 }
 

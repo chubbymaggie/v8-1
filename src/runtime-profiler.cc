@@ -162,14 +162,14 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   SharedFunctionInfo* shared = function->shared();
   // If the code is not optimizable, don't try OSR.
   if (!shared->code()->optimizable()) {
-	if ( FLAG_trace_function_internals ) {
+	if ( FLAG_trace_internals ) {
 	  Code* code = shared->code();
 	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
 			Logger::OptFailed,
 			function,
 			code,
-			shared, "@2")
+			shared, "OSR@Disabled")
 		  );
 	}
 	return;
@@ -179,7 +179,7 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   // allocated arguments object.  The optimized code would bypass it for
   // arguments accesses, which is unsound.  Don't try OSR.
   if (shared->uses_arguments()) {
-	if ( FLAG_trace_function_internals ) {
+	if ( FLAG_trace_internals ) {
 	  Code* code = shared->code();
 	  LOG(function->GetIsolate(),
 			EmitFunctionEvent(
@@ -187,7 +187,7 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
 			function,
 			code,
 			shared,
-			"UseArguments @3")
+			"OSR@-UseArguments")
 		  );
 	}
 	return;
@@ -341,7 +341,7 @@ void RuntimeProfiler::OptimizeNow() {
     if (shared->optimization_disabled()) {
 	  // We track the opt failed status immediately
 	  // because later v8 tries to reenable optimization, which erases the opt disable information
-	  if ( FLAG_trace_function_internals ) {
+	  if ( FLAG_trace_internals ) {
 		//PrintF("------>optimizeNow exit = %s\n", shared->DebugName()->ToCString());
 		//Flush();
 		Code* code = shared->code();
@@ -350,7 +350,7 @@ void RuntimeProfiler::OptimizeNow() {
 			  Logger::OptFailed,
 			  function,
 			  code,
-			  shared, "@4")
+			  shared, NULL)
 			);
 	  }
 

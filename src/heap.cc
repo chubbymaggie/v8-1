@@ -2003,13 +2003,8 @@ class ScavengingVisitor : public StaticVisitorBase {
     // Set the forwarding address.
     source->set_map_word(MapWord::FromForwardingAddress(target));
 	
-	// We also record movement event
-	if ( FLAG_trace_function_internals 
-	  || FLAG_trace_object_internals 
-	  ) {
-	  LOG( heap->isolate(),
-			EmitGCMoveEvent(source, target));
-	}
+	// It's dangerous to retrive the map of source object
+	LOG_INTERNAL_EVENT(heap->isolate(), EmitGCMoveEvent(source, target));
 
     if (logging_and_profiling_mode == LOGGING_AND_PROFILING_ENABLED) {
       // Update NewSpace stats if necessary.
@@ -3556,7 +3551,7 @@ MaybeObject* Heap::AllocateSharedFunctionInfo(Object* name) {
   if (!maybe->To<SharedFunctionInfo>(&share)) return maybe;
 
   // Set pointer fields.
-  /*if ( FLAG_trace_function_internals)
+  /*if ( FLAG_trace_internals)
     PrintF( "Create Function = %s\n", (*String::cast(name)->ToCString()) );*/
   share->set_name(name);
   Code* illegal = isolate_->builtins()->builtin(Builtins::kIllegal);
@@ -4291,17 +4286,15 @@ MaybeObject* Heap::AllocateFunction(Map* function_map,
   }
   InitializeFunction(JSFunction::cast(result), shared, prototype);
 
- // if ( FLAG_trace_function_internals ) {
-	//JSFunction* function = JSFunction::cast(result);
-	//Code* code = function->code();
-	//LOG(isolate(),
-	//	EmitFunctionEvent(
-	//	Logger::CreateFunction,
-	//	function,
-	//	code,			  // might be null
-	//	shared)
-	//);
- // }
+  if ( FLAG_trace_internals ) {
+	JSFunction* function = JSFunction::cast(result);
+	LOG(isolate(),
+		EmitObjectEvent(
+		Logger::CreateFunction,
+		function,
+		shared)
+	);
+  }
 
   return result;
 }
@@ -4915,6 +4908,10 @@ MaybeObject* Heap::CopyJSObject(JSObject* source) {
     }
     JSObject::cast(clone)->set_properties(FixedArray::cast(prop), wb_mode);
   }
+
+  /*LOG_INTERNAL_EVENT(isolate_, 
+	EmitObjectEvent(Logger::CopyObject, JSObject::cast(clone), source));*/
+
   // Return the new clone.
   return clone;
 }

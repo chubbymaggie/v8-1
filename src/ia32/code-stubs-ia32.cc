@@ -389,10 +389,10 @@ void FastNewClosureStub::Generate(MacroAssembler* masm) {
 
   // Return and remove the on-stack parameter.
   __ bind(&post_process);
-  //if ( FLAG_trace_function_internals ) {
-	/*__ push(eax);
-	__ CallRuntime(Runtime::kLogFunctionCreate, 1);*/
-  //}
+  /*if ( FLAG_trace_internals ) {
+	__ push(eax);
+	__ CallRuntime(Runtime::kLogFunctionCreate, 1);
+  }*/
   __ ret(1 * kPointerSize);
 
   __ bind(&restore);

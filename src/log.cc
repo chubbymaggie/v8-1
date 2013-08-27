@@ -415,8 +415,6 @@ Logger::Logger(Isolate* isolate)
     prev_to_(NULL),
     prev_code_(NULL),
     epoch_(0) {
-	  is_tracing_internals_ 
-		= FLAG_trace_internals_start ? true : false;
 }
 
 
@@ -652,18 +650,6 @@ void Logger::CodeDeoptEvent(Code* code) {
 
 void Logger::ConsFunctionName(LogMessageBuilder& msg, SharedFunctionInfo* shared)
 {
-  // Inspect the name of this function
-  String* f_name = NULL;
-  if ( shared != NULL ) f_name = shared->DebugName();
-  if ( f_name != NULL && 
-		f_name->length() > 0 ) {
-	SmartArrayPointer<char> c_f_name = f_name->ToCString();
-	msg.Append(" %s", *c_f_name);
-  }
-  else {
-	msg.Append(" Closure");
-  }
-
   // Compute the position of this function in source code
   int line_num = -1;
   if ( shared != NULL ) {
@@ -675,47 +661,260 @@ void Logger::ConsFunctionName(LogMessageBuilder& msg, SharedFunctionInfo* shared
 		  								shared->start_position()) + 1;
 	}
   }
-  msg.Append("@%d", line_num);
+
+  if ( line_num == -1 ) {
+	if ( shared == isolate_->array_function()->shared() )
+	  msg.Append("G-Array");
+	else
+	  msg.Append("G-Object");
+	return;
+  }
+
+  // Inspect the name of this function
+  String* f_name = NULL;
+  if ( shared != NULL ) f_name = shared->DebugName(); 
+  if ( f_name != NULL && 
+		f_name->length() > 0 ) {
+	SmartArrayPointer<char> c_f_name = f_name->ToCString();
+	msg.Append("%s", *c_f_name);
+  }
+  else {
+	msg.Append("Closure");
+  }
+
+  msg.Append("@L%d", line_num);
 }
 
-void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
-							   Code* code, SharedFunctionInfo* shared, const char* add_msg) {
-  if (!log_->IsEnabled() || 
-	is_tracing_internals_ == false) return;
-  
+
+void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
+{
+  if (!log_->IsEnabled()) return;
+
   LogMessageBuilder msg(this);
-  
-  // Format the input parameters
-  Address func_addr = NULL;
-  if ( func != NULL ) func_addr = func->address();
 
-  Address new_code = NULL;
-  if ( code != NULL ) new_code = code->address();
+  // Obtain the topmost jsfunction activation
+  // Using frame iterator excludes the outmost global function
+  JavaScriptFrameIterator it(isolate_);
+  JSFunction* def_function = NULL;
 
-  Address shared_addr = NULL;
-  if ( shared != NULL ) shared_addr = shared->address();
+  if ( !it.done() ) {
+	JavaScriptFrame* frame = it.frame();
+	Object* def_function_or_smi = frame->function();
 
-  msg.Append("%d %p", 
-	  event,
-	  func_addr);
+	if ( def_function_or_smi->IsJSFunction() ) {
+	  def_function = JSFunction::cast(def_function_or_smi);
+	}
+  }
 
-  // Followed are handlers for different event types
-  switch(event) {
-  case CreateFunction:
+  msg.Append( "%d %p %p",
+	event,
+	def_function,
+	obj);
+
+
+  // In case some events need more options
+  va_list arg_ptr;
+  Map* cur_map = obj->map();
+
+  switch (event)
+  {
+  case CreateObjBoilerplate:
+  case CreateArrayBoilerplate:
 	{
-	  // Record the installed code address
-	  msg.Append(" %p %p", shared_addr, new_code);
-	  ConsFunctionName(msg, shared);
+	  va_start(arg_ptr, obj);
+	  // Get index of the boilerplate
+	  int index = va_arg(arg_ptr, int);
+	  va_end(arg_ptr);
+
+	  msg.Append( " %p %d", cur_map, index );
 	}
 	break;
 
-  case GenFullCode:
-	msg.Append(" %p", new_code);
+  case CreateObjectLiteral:
+  case CreateArrayLiteral:
+	{
+	  va_start(arg_ptr, obj);
+	  // Boilerplate
+	  HeapObject* constructor = va_arg(arg_ptr, HeapObject*);
+	  // Get index of the boilerplate
+	  int index = va_arg(arg_ptr, int);
+	  va_end(arg_ptr);
+
+	  msg.Append( " %p %p ", constructor, cur_map);
+	  
+	  // Print the name of elcosing function for log readability
+	  if ( def_function != NULL )
+		ConsFunctionName(msg, def_function->shared());
+	  else
+		msg.Append("global");
+
+	  msg.Append("->%d", index);
+	}
 	break;
 
-  case GenFullWithDeopt:
+  case CreateNewObject:
+  case CreateNewArray:
 	{
-	  //Address old_code = func->code()->address();
+	  va_start(arg_ptr, obj);
+	  // Get allocation signature
+	  JSFunction* constructor = va_arg(arg_ptr, JSFunction*);
+	  va_end(arg_ptr);
+
+	  msg.Append( " %p %p", constructor, cur_map );
+
+	  // Obtain the name for the constructor function
+	  msg.Append(" New(");
+	  SharedFunctionInfo* shared = constructor->shared();
+	  ConsFunctionName(msg, shared);
+	  msg.Append(")");
+	}
+	break;
+
+  case CreateFunction:
+	{
+	  // Output the sharedinfo and installed code
+	  va_start(arg_ptr, obj);
+	  HeapObject* alloc_sig = va_arg(arg_ptr, HeapObject*);
+	  va_end(arg_ptr);
+
+	  JSFunction* function = JSFunction::cast(obj);
+	  Code* code = function->code();
+	  msg.Append(" %p %p %p ", alloc_sig, cur_map, code);
+	  ConsFunctionName(msg, SharedFunctionInfo::cast(alloc_sig));
+	}
+	break;
+
+  case CopyObject:
+	{
+	  va_start(arg_ptr, obj);
+	  JSObject* source_obj = va_arg(arg_ptr, JSObject*);
+	  va_end(arg_ptr);
+	  msg.Append(" %p", source_obj);
+	}
+	break;
+
+  case ChangePrototype:
+	{
+	  // Introduce a new map
+	  msg.Append(" %p %p", 
+		cur_map, cur_map->prototype());
+	}
+	break;
+
+  case SetMap:
+	{
+	  // Introduce a new map
+	  msg.Append(" %p", cur_map);
+	}
+	break;
+
+  case NewField:
+  case DelField:
+  case WriteFieldTransition:
+	{
+	  va_start(arg_ptr, obj);
+	  Name* f_name = va_arg(arg_ptr, Name*);
+	  Map* old_map = va_arg(arg_ptr, Map*);
+	  va_end(arg_ptr);
+
+	  // map transitions
+	  msg.Append(" %p %p", old_map, cur_map);
+
+	  // Then, the field name
+	  if ( f_name->IsString() && f_name->Size() > 0) {
+		String* s = String::cast(f_name);
+		msg.Append(" %s", *(s->ToCString()));
+	  }
+	  else
+		msg.Append(" unknown_f");
+	}
+	break;
+
+  case ElemTransition:
+	{
+	  va_start(arg_ptr, obj);
+	  Map* old_map = va_arg(arg_ptr, Map*);
+	  va_end(arg_ptr);
+
+	  // map transitions
+	  msg.Append(" %p %p", old_map, cur_map);
+	}
+	// Fall through
+  case CowCopy:
+	{
+	  ElementsKind kind = cur_map->elements_kind();
+	  int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
+	  int capacity = obj->elements()->length();
+	  int bytes = base_size * capacity;
+	  msg.Append( " %d", bytes );
+	}
+	break;
+
+  case ElemToSlowMode:
+  case PropertyToSlowMode:
+	{
+	  va_start(arg_ptr, obj);
+	  Map* old_map = va_arg(arg_ptr, Map*);
+	  va_end(arg_ptr);
+
+	  // Introduce a new map
+	  msg.Append(" %p %p", old_map, cur_map);
+	}
+	break;
+
+  case ElemToFastMode:
+  case PropertyToFastMode:
+	{
+	  va_start(arg_ptr, obj);
+	  Map* old_map = va_arg(arg_ptr, Map*);
+	  va_end(arg_ptr);
+
+	  // Introduce a new map
+	  if ( old_map == NULL ) old_map = cur_map;
+	  msg.Append(" %p %p", old_map, cur_map);
+	}
+	break;
+
+ // case ExpandArray:
+	//{
+	//  ElementsKind kind = cur_map->elements_kind();
+	//  int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
+
+	//  // Now we compute how many data are copied
+	//  va_start(arg_ptr, obj);
+	//  // Obtain the array capacity before growing
+	//  int old_capacity = va_arg(arg_ptr, int);
+	//  va_end(arg_ptr);
+
+	//  int cur_capacity = obj->elements()->length();
+	//  int bytes = base_size * (old_capacity+cur_capacity);
+	//  msg.Append( " %d", bytes );
+	//}
+	//break;
+
+  default:
+	break;
+  }
+  msg.Append("\n");
+  msg.WriteToLogFile();
+}
+
+
+void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
+							   Code* new_code, SharedFunctionInfo* shared, ...) {
+  if (!log_->IsEnabled()) return;
+  
+  LogMessageBuilder msg(this);
+  msg.Append("%d %p", 
+	  event,
+	  func);
+
+  va_list arg_ptr;
+
+  // Followed are handlers for different event types
+  switch(event) {
+  case GenFullCode:
+	{
 	  msg.Append(" %p", new_code);
 	}
 	break;
@@ -733,15 +932,32 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
+  case SetCode:
+	{
+	  msg.Append(" %p", new_code);
+	}
+	break;
+
   case DisableOpt:
   case ReenableOpt:
-	msg.Append(" %p %s", shared_addr, add_msg);
+	{
+	  va_start(arg_ptr, shared);
+	  const char* add_msg = va_arg(arg_ptr, const char*);
+	  va_end(arg_ptr);
+	  msg.Append(" %p %s", shared, add_msg);
+	}
 	break;
 
   case OptFailed:
 	{
 	  // We also output the new code, for the case it is different to old code
 	  msg.Append( " %p", new_code );
+
+	  // Then we output the failed message if possible
+	  va_start(arg_ptr, shared);
+	  const char* add_msg = va_arg(arg_ptr, const char*);
+	  va_end(arg_ptr);
+
 	  if ( add_msg != NULL )
 		msg.Append(" %s", add_msg);
 	  else
@@ -750,23 +966,46 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	}
 	break;
 
-  case DeoptCode:
+  case RegularDeopt:
 	{
-	  // Perhaps sometimes we miss code generation
-	  // We output the old to indicate this case, :<
-	  Address old_code = NULL;
-	  if ( func != NULL ) old_code = func->code()->address();
-	  
-	  const int kMaxOptCount =
-		(FLAG_deopt_every_n_times == 0 ? FLAG_max_opt_count : 1000) + 1;
-	  
-	  msg.Append(" %p %d|%d",
-		old_code,
-		shared->opt_count(), 
-		kMaxOptCount ); 
+	  // Deoptimization message
+	  va_start(arg_ptr, shared);
+	  Code* old_code = va_arg(arg_ptr, Code*);
+	  HeapObject* failed_obj = va_arg(arg_ptr, HeapObject*);
+	  Map* expected_map = va_arg(arg_ptr, Map*);
+	  const char* add_msg = va_arg(arg_ptr, const char*);
+	  va_end(arg_ptr);
 
-	  msg.Append(" %p %s", 
-		  new_code, add_msg);
+	  // Perhaps sometimes we miss code generation
+	  // We also output the old code to indicate this case, :<
+	  msg.Append(" %p %p %p %p %s", 
+		old_code, new_code, 
+		failed_obj, expected_map,
+		add_msg);
+	}
+	break;
+
+  case DeoptAsInline:
+	{
+	  // This function is deoptimized because an outer function that inlines this function deoptimized
+	  va_start(arg_ptr, shared);
+	  Code* old_code = va_arg(arg_ptr, Code*);
+	  JSFunction* real_deopt_func = va_arg(arg_ptr, JSFunction*);
+	  va_end(arg_ptr);
+
+	  msg.Append( " %p %p %p", old_code, new_code, real_deopt_func ); 
+	}
+	break;
+
+  case ForceDeopt:
+	{
+	  va_start(arg_ptr, shared);
+	  Code* old_code = va_arg(arg_ptr, Code*);
+	  va_end(arg_ptr);
+
+	  msg.Append(" %p %p",
+		old_code,
+		new_code); 
 	}
 	break;
 
@@ -778,138 +1017,98 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
   msg.WriteToLogFile();
 }
 
-void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, 
-							 HeapObject* alloc_sig, ...)
+
+void Logger::EmitMapEvent(InternalEvent event, ...)
 {
-  if (!log_->IsEnabled() || 
-	is_tracing_internals_ == false) return;
-
-  Address obj_addr = NULL;
-  Address map_addr = NULL;
-
-  if ( obj != NULL ) {
-	obj_addr = obj->address();
-	map_addr = obj->map()->address();
-  }
+  if (!log_->IsEnabled()) return;
 
   LogMessageBuilder msg(this);
+  msg.Append("%d", event);
 
-  msg.Append( "%d %p",
-	event,
-	obj_addr);
-
-  switch (event)
-  {
-  case v8::internal::Logger::CreateObject:
-  case v8::internal::Logger::CreateArray:
+  va_list arg_ptr;
+  switch(event) {
+  case BeginDeoptOnMap:
 	{
-	  Address alloc_sig_addr = NULL;
-	  if ( alloc_sig != NULL ) alloc_sig_addr = alloc_sig->address();
-
-	  msg.Append( " %p %p", 
-		alloc_sig_addr, map_addr );
-
-	  // Output object name
-	  va_list arg_ptr;
-	  va_start(arg_ptr, alloc_sig);
-
-	  if ( alloc_sig->IsJSObject() ) {
-		// Get enclosing function of this literal
-		JSFunction* base_func = va_arg(arg_ptr, JSFunction*);
-		// Get index of the boilerplate
-		int index = va_arg(arg_ptr, int);
-		
-		ConsFunctionName(msg, base_func->shared());
-		msg.Append( "#%d", index );
-	  }
-	  else {
-		// The constructor function sharedinfo
-		SharedFunctionInfo* shared = SharedFunctionInfo::cast(alloc_sig);
-		ConsFunctionName(msg, shared);
-		msg.Append( "#constr" );
-	  }
-
+	  va_start(arg_ptr, event);
+	  Map* trigger_map = va_arg(arg_ptr, Map*);
 	  va_end(arg_ptr);
+	  msg.Append(" %p", trigger_map); 
 	}
 	break;
 
-  case v8::internal::Logger::ChangeType:
-	break;
-
-  case v8::internal::Logger::ExpandArray:
-	{
-	  JSArray* array = JSArray::cast(obj);
-	  ElementsKind kind = array->map()->elements_kind();
-	  int base_size = kIntSize;
-	  if ( kind == FAST_DOUBLE_ELEMENTS ||
-		kind == FAST_HOLEY_DOUBLE_ELEMENTS )
-		base_size = kDoubleSize;
-
-	  // Now we compute how many data are copied
-	  va_list arg_ptr;
-	  va_start(arg_ptr, alloc_sig);
-	  // Obtain the array capacity before growing
-	  int old_capacity = va_arg(arg_ptr,int);
-	  va_end(arg_ptr);
-
-	  int bytes = base_size * old_capacity;
-	  msg.Append( " %d", bytes );
-	}
-	break;
-
-  case v8::internal::Logger::MakeHole:
-	break;
-  case v8::internal::Logger::ToSlowMode:
-	break;
-  case v8::internal::Logger::ArrayOpsStoreChange:
-	break;
-  case v8::internal::Logger::ArrayOpsPure:
-	break;
   default:
 	break;
   }
+
   msg.Append("\n");
   msg.WriteToLogFile();
 }
+
 
 void Logger::EmitGCMoveEvent(HeapObject* from, HeapObject* to)
 {
-  if (!log_->IsEnabled() || 
-	is_tracing_internals_ == false) return;
+  if (!log_->IsEnabled()) return;
 
-  InternalEvent event;
+  InternalEvent event = GCMoveObject;
 
-  if ( to->IsJSFunction() ) {
-	/*JSFunction* func = JSFunction::cast(to);
-	if ( func->shared()->native() ) return;*/
-	event = GCMoveFunction;
+  // We use from because the target address might be undefined memory chunck
+  if ( !from->IsJSObject() ) {
+	if ( from->IsCode() ) {
+	  event = GCMoveCode;
+	}
+	else if ( from->IsSharedFunctionInfo() ) {
+	  event = GCMoveShared;
+	}
+	else if ( from->IsMap() ) {
+	  event = GCMoveMap;
+	}
   }
-  else if ( to->IsJSObject() ) {
-	event = GCMoveObject;
-  }
-  else if ( to->IsSharedFunctionInfo() ) {
-	event = GCMoveShared;
-  }
-  else if ( to->IsCode() ) {
-	event = GCMoveCode;
-  }
-  else
-	return;
 
   LogMessageBuilder msg(this);
-
   msg.Append("%d %p %p\n",
 	event,
-	from->address(),
-	to->address());
+	from,
+	to);
 
   msg.WriteToLogFile();
 }
 
 
-void Logger::toggle_trace_internal(bool set_as)
+// Sample useage
+//if ( FLAG_trace_internals ) {
+//	Isolate* isolate = GetIsolate();
+//	LOG( isolate,
+//	  EmitOtherEvent(Logger::ForDebug, "d1")
+//	  );
+//  }
+void Logger::EmitSysEvent(InternalEvent event, ...)
 {
-  is_tracing_internals_ = set_as;
+  if (!log_->IsEnabled()) return;
+
+  LogMessageBuilder msg(this);
+  msg.Append("%d", event);
+
+  va_list arg_ptr;
+
+  switch( event ) {
+  case NotifyStackDeoptAll:
+	break;
+
+  case ForDebug:
+	{
+	  va_start(arg_ptr, event);
+	  const char* s = va_arg(arg_ptr, const char*);
+	  va_end(arg_ptr);
+	  msg.Append(" %s", s);
+	}
+	break;
+
+  default:
+	break;
+  }
+
+  msg.Append("\n");
+  msg.WriteToLogFile();
 }
 
 

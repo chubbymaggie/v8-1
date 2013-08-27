@@ -398,20 +398,6 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
       // The existing unoptimized code was replaced with the new one.
       Compiler::RecordFunctionCompilation(
           Logger::LAZY_COMPILE_TAG, &unoptimized, shared);
-
-	  // The newly compiled code may not be inserted into sharedinfo
-	  // Therefore, we use shared->code() 
-	  if ( FLAG_trace_function_internals ) {
-		Code* code = shared->code();
-		JSFunction* function = *(info()->closure());
-		  LOG(isolate(),
-			EmitFunctionEvent(
-			Logger::GenFullWithDeopt,
-			function,
-			code,
-			*shared)
-		 );
-	  }
     }
     if (FLAG_hydrogen_stats) {
       int64_t ticks = OS::Ticks() - start_ticks;
@@ -860,7 +846,7 @@ static bool InstallFullCode(CompilationInfo* info) {
       bool res = Compiler::CompileLazy(&optimized);
 
 	  // A mysterious place that enables optimization
-	  if ( FLAG_trace_function_internals ) {
+	  /*if ( FLAG_trace_internals ) {
 		Code* code = function->code();
 		LOG(function->GetIsolate(),
 			EmitFunctionEvent(
@@ -869,7 +855,7 @@ static bool InstallFullCode(CompilationInfo* info) {
 			code,
 			*shared)
 		  );
-	  }
+	  }*/
 
 	  return res;
     }
@@ -930,7 +916,7 @@ static bool InstallCodeFromOptimizedCodeMap(CompilationInfo* info) {
       shared->InstallFromOptimizedCodeMap(*function, index);
 
 	  // We capture the hitting the optimization cache
-	  if ( FLAG_trace_function_internals ) {
+	  /*if ( FLAG_trace_internals ) {
 		Code* code = function->code();
 		LOG(function->GetIsolate(),
 			EmitFunctionEvent(
@@ -939,7 +925,7 @@ static bool InstallCodeFromOptimizedCodeMap(CompilationInfo* info) {
 			code,
 			*shared)
 		  );
-	  }
+	  }*/
 
       return true;
     }

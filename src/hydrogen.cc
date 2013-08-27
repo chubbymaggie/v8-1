@@ -1152,11 +1152,11 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
   environment()->Push(new_elements);
 
   // We log array growing action
-  if ( FLAG_trace_object_internals ) {
+  if ( FLAG_trace_internals ) {
 	// Push the runtime call parameters
-	Add<HPushArgument>(Add<HConstant>(Logger::ExpandArray));
+	Add<HPushArgument>(Add<HConstant>(Logger::ElemTransition));
 	Add<HPushArgument>(object);
-	Add<HPushArgument>(current_capacity);
+	Add<HPushArgument>(graph()->GetConstantNull());
 
     Add<HCallRuntime>(context,
 	  isolate()->factory()->empty_string(),
@@ -1208,6 +1208,17 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
                                                    kind, length, capacity);
 
   environment()->Push(new_elements);
+
+  if ( FLAG_trace_internals ) {
+	Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
+	Add<HPushArgument>(object);
+	Add<HPushArgument>(graph()->GetConstantNull());
+
+    Add<HCallRuntime>(environment()->LookupContext(),
+	  isolate()->factory()->empty_string(),
+      Runtime::FunctionForId(Runtime::kLogObjectManipulate),
+      3);
+  }
 
   cow_checker.Else();
 
@@ -5370,7 +5381,7 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
   int max_properties = kMaxFastLiteralProperties;
   Handle<Object> original_boilerplate(closure->literals()->get(
       expr->literal_index()), isolate());
-  if (original_boilerplate->IsJSObject() &&
+  if (!FLAG_trace_internals && original_boilerplate->IsJSObject() &&
       IsFastLiteral(Handle<JSObject>::cast(original_boilerplate),
                     kMaxFastLiteralDepth,
                     &max_properties,
@@ -5415,20 +5426,19 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
   // of the property values and is the value of the entire expression.
   Push(literal);
 
-  if ( FLAG_trace_object_internals ) {
-	// We log the array created at this literal
-	int literal_index = expr->literal_index();
+  // We log the array created at this literal
+  int literal_index = expr->literal_index();
 
-	// Push the runtime call 
+  // Push the runtime call
+  if (FLAG_trace_internals) {
 	Add<HPushArgument>(literal);
 	Add<HPushArgument>(Add<HConstant>(closure));
-	Add<HPushArgument>(Add<HConstant>(Logger::CreateObject));
-    Add<HPushArgument>(Add<HConstant>(literal_index));
+	Add<HPushArgument>(Add<HConstant>(literal_index));
 
-    Add<HCallRuntime>(context,
-                      isolate()->factory()->empty_string(),
-                      Runtime::FunctionForId(Runtime::kLogObjectCreate),
-                      4);
+	Add<HCallRuntime>(context,
+					  isolate()->factory()->empty_string(),
+					  Runtime::FunctionForId(Runtime::kLogObjectCreate),
+					  3);
   }
 
   expr->CalculateEmitStore(zone());
@@ -5541,7 +5551,7 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   int data_size = 0;
   int pointer_size = 0;
   int max_properties = kMaxFastLiteralProperties;
-  if (IsFastLiteral(original_boilerplate_object,
+  if (!FLAG_trace_internals && IsFastLiteral(original_boilerplate_object,
                     kMaxFastLiteralDepth,
                     &max_properties,
                     &data_size,
@@ -5587,21 +5597,20 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   // The literal index is on the stack, too.
   Push(Add<HConstant>(expr->literal_index()));
 
-  if ( FLAG_trace_object_internals ) {
+  if ( FLAG_trace_internals ) {
 	// We log the array created at this literal
 	int literal_index = expr->literal_index();
-	Handle<JSFunction> function = function_state()->compilation_info()->closure();
+	Handle<JSFunction> closure = function_state()->compilation_info()->closure();
 
 	// Push the runtime call parameters
 	Add<HPushArgument>(literal);
-	Add<HPushArgument>(Add<HConstant>(function));
-	Add<HPushArgument>(Add<HConstant>(Logger::CreateArray));
+	Add<HPushArgument>(Add<HConstant>(closure));
     Add<HPushArgument>(Add<HConstant>(literal_index));
 
     Add<HCallRuntime>(context,
                       isolate()->factory()->empty_string(),
                       Runtime::FunctionForId(Runtime::kLogObjectCreate),
-                      4);
+                      3);
   }
 
   HInstruction* elements = NULL;
@@ -8343,7 +8352,7 @@ void HOptimizedGraphBuilder::VisitCallNew(CallNew* expr) {
     ASSERT(environment()->ExpressionStackAt(receiver_index) == function);
     environment()->SetExpressionStackAt(receiver_index, receiver);
 
-    if (TryInlineConstruct(expr, receiver)) return;
+    //if (TryInlineConstruct(expr, receiver)) return;
 
     // TODO(mstarzinger): For now we remove the previous HAllocateObject and
     // add HPushArgument for the arguments in case inlining failed.  What we

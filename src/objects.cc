@@ -1572,6 +1572,25 @@ void HeapObject::HeapObjectShortPrint(StringStream* accumulator) {
 }
 
 
+void HeapObject::set_map(Map* value) {
+  set_map_word(MapWord::FromMap(value));
+  if (value != NULL) {
+    // TODO(1600) We are passing NULL as a slot because maps can never be on
+    // evacuation candidate.
+    value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
+  }
+
+  /*if ( FLAG_trace_internals && IsJSObject() ) {
+	Isolate* isolate = GetIsolate();
+	LOG( isolate,
+	  EmitObjectEvent(
+	  Logger::SetMap,
+	  JSObject::cast(this))
+	 );
+  }*/
+}
+
+
 void HeapObject::Iterate(ObjectVisitor* v) {
   // Handle header
   IteratePointer(v, kMapOffset);
@@ -1834,7 +1853,6 @@ MaybeObject* JSObject::AddFastProperty(Name* name,
     MaybeObject* maybe_obj =
         NormalizeProperties(CLEAR_INOBJECT_PROPERTIES, 0);
     if (!maybe_obj->ToObject(&obj)) return maybe_obj;
-
     return AddSlowProperty(name, value, attributes);
   }
 
@@ -2012,6 +2030,15 @@ MaybeObject* JSObject::AddProperty(Name* name,
                         handle(name, isolate),
                         handle(heap->the_hole_value(), isolate));
   }
+
+  if ( FLAG_trace_internals ) {
+	  LOG(isolate,
+		EmitObjectEvent(
+		Logger::NewField,
+		this,
+		name, map_of_this )
+		);
+	}
 
   return *hresult;
 }
@@ -2430,6 +2457,16 @@ MaybeObject* Map::CopyGeneralizeAllRepresentations() {
 }
 
 
+void Map::NotifyLeafMapLayoutChange() {
+  Isolate* isolate = GetIsolate();
+  LOG_INTERNAL_EVENT(isolate, EmitMapEvent(Logger::BeginDeoptOnMap, this));
+
+  dependent_code()->DeoptimizeDependentCodeGroup(
+      isolate,
+      DependentCode::kPrototypeCheckGroup);
+}
+
+
 void Map::DeprecateTransitionTree() {
   if (!FLAG_track_fields) return;
   if (is_deprecated()) return;
@@ -2440,10 +2477,14 @@ void Map::DeprecateTransitionTree() {
     }
   }
   deprecate();
+
+  Isolate* isolate = GetIsolate();
+  LOG_INTERNAL_EVENT(isolate, EmitMapEvent(Logger::BeginDeoptOnMap, this));
+
   dependent_code()->DeoptimizeDependentCodeGroup(
-      GetIsolate(), DependentCode::kTransitionGroup);
+      isolate, DependentCode::kTransitionGroup);
   dependent_code()->DeoptimizeDependentCodeGroup(
-      GetIsolate(), DependentCode::kPrototypeCheckGroup);
+      isolate, DependentCode::kPrototypeCheckGroup);
 }
 
 
@@ -3794,6 +3835,8 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* lookup,
       map()->is_observed() && lookup->IsDataProperty()) {
     old_value = Object::GetProperty(self, name);
   }
+  
+  Map* old_map = map();
 
   // This is a real property that is not read-only, or it is a
   // transition or null descriptor and there are no setters in the prototypes.
@@ -3918,6 +3961,16 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* lookup,
     }
   }
 
+  if ( FLAG_trace_internals ) {
+	if (map() != old_map) {
+	  LOG( isolate,
+		EmitObjectEvent(
+		Logger::WriteFieldTransition,
+		*self, *name, old_map)
+		);
+	}
+  }
+
   return *hresult;
 }
 
@@ -4000,6 +4053,8 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
     if (lookup.IsDataProperty()) old_value = Object::GetProperty(self, name);
     old_attributes = lookup.GetAttributes();
   }
+
+  Map* old_map = map();
 
   // Check of IsReadOnly removed from here in clone.
   MaybeObject* result = *value;
@@ -4118,6 +4173,16 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
         EnqueueChangeRecord(self, "updated", name, old_value);
       }
     }
+  }
+
+  if ( FLAG_trace_internals ) {
+	if (map() != old_map) {
+	  LOG( isolate,
+		EmitObjectEvent(
+		Logger::WriteFieldTransition,
+		*self, *name, old_map)
+		);
+	}
   }
 
   return *hresult;
@@ -4540,6 +4605,17 @@ MaybeObject* JSObject::NormalizeProperties(PropertyNormalizationMode mode,
     Print();
   }
 #endif
+
+  if ( FLAG_trace_internals ) {
+	Isolate* isolate = GetIsolate();
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::PropertyToSlowMode,
+	  this,
+	  map_of_this)
+	  );
+  }
+
   return this;
 }
 
@@ -4617,6 +4693,8 @@ MaybeObject* JSObject::NormalizeElements() {
   }
   if (array->IsDictionary()) return array;
 
+  Map* old_object_map = map();
+
   ASSERT(HasFastSmiOrObjectElements() ||
          HasFastDoubleElements() ||
          HasFastArgumentsElements());
@@ -4659,6 +4737,16 @@ MaybeObject* JSObject::NormalizeElements() {
     Print();
   }
 #endif
+
+  if ( FLAG_trace_internals ) {
+	Isolate* isolate = GetIsolate();
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::ElemToSlowMode,
+	  this, 
+	  old_object_map)
+	  );
+  }
 
   ASSERT(HasDictionaryElements() || HasDictionaryArgumentsElements());
   return dictionary;
@@ -5153,6 +5241,7 @@ MaybeObject* JSObject::DeleteProperty(Name* name, DeleteMode mode) {
   HandleScope scope(isolate);
   Handle<JSObject> self(this);
   Handle<Name> hname(name);
+  Map* old_map = map();
 
   Handle<Object> old_value = isolate->factory()->the_hole_value();
   bool is_observed = FLAG_harmony_observation && self->map()->is_observed();
@@ -5175,6 +5264,7 @@ MaybeObject* JSObject::DeleteProperty(Name* name, DeleteMode mode) {
     result = self->NormalizeProperties(CLEAR_INOBJECT_PROPERTIES, 0);
     if (!result->To(&obj)) return result;
     // Make sure the properties are normalized before removing the entry.
+	old_map = map();		// update
     result = self->DeleteNormalizedProperty(*hname, mode);
   }
 
@@ -5183,6 +5273,15 @@ MaybeObject* JSObject::DeleteProperty(Name* name, DeleteMode mode) {
 
   if (is_observed && !self->HasLocalProperty(*hname)) {
     EnqueueChangeRecord(self, "deleted", hname, old_value);
+  }
+
+  if ( FLAG_trace_internals ) {
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::DelField,
+	  this,
+	  *hname, old_map)
+	 );
   }
 
   return *hresult;
@@ -6532,7 +6631,6 @@ MaybeObject* Map::ShareDescriptor(DescriptorArray* descriptors,
 
   set_transitions(transitions);
   set_owns_descriptors(false);
-
   return result;
 }
 
@@ -9194,6 +9292,20 @@ static bool CompileLazyHelper(CompilationInfo* info,
   if (!result && flag == CLEAR_EXCEPTION) {
     info->isolate()->clear_pending_exception();
   }
+  
+  if ( FLAG_trace_internals && result == true) {
+	JSFunction *closure = *(info->closure());
+	Code* code = closure->code();
+	LOG(info->isolate(),
+		EmitFunctionEvent(
+		info->IsOptimizing() ? Logger::GenOptCode : Logger::GenFullCode,
+		closure,
+		code,
+		closure->shared()
+		)
+	 );
+  }
+
   return result;
 }
 
@@ -9359,7 +9471,7 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
   }
 
   // First time generate full code for this function
-  if ( FLAG_trace_function_internals ) {
+  /*if ( FLAG_trace_internals) {
 	Code* code = function->code();
 	LOG(function->GetIsolate(),
 		EmitFunctionEvent(
@@ -9369,7 +9481,7 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
 		  function->shared()
 		)
 	 );
-  }
+  }*/
 
   return result;
 }
@@ -9381,20 +9493,6 @@ bool JSFunction::CompileOptimized(Handle<JSFunction> function,
   CompilationInfoWithZone info(function);
   info.SetOptimizing(osr_ast_id);
   bool res = CompileLazyHelper(&info, flag);
- // if ( res == false ) {
-	//// Something wrong happened during optimization 
-	//if ( FLAG_trace_function_internals ) {
-	//  Code* code = function->code();
-	//  LOG(function->GetIsolate(),
-	//		EmitFunctionEvent(
-	//		Logger::OptFailed,
-	//		*function,
-	//		code,
-	//		function->shared(), "@1")
-	//	  );
-	//}
- // }
-
   return res;
 }
 
@@ -9524,6 +9622,18 @@ MaybeObject* JSFunction::SetInstancePrototype(Object* value) {
     set_prototype_or_initial_map(value);
   }
   heap->ClearInstanceofCache();
+
+  if ( FLAG_trace_internals 
+	&& value->IsJSObject() ) {
+	  // We only log the regular way of prototype change
+	Isolate* isolate = GetIsolate();
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::ChangePrototype,
+	  this)
+	  );
+  }
+
   return value;
 }
 
@@ -9762,7 +9872,7 @@ void SharedFunctionInfo::DisableOptimization(const char* reason) {
     ShortPrint();
     PrintF(", reason: %s]\n", reason);
   }
-  if ( FLAG_trace_function_internals ) {
+  if ( FLAG_trace_internals ) {
 	if ( code()->kind() < Code::STUB ) {
 	  LOG(GetIsolate(),
 			EmitFunctionEvent(
@@ -10816,8 +10926,9 @@ MaybeObject* JSObject::SetFastElementsCapacityAndLength(
       accessor->CopyElements(this, new_elements, elements_kind);
   if (maybe_obj->IsFailure()) return maybe_obj;
 
+  Map* old_map = map();
   if (elements_kind != NON_STRICT_ARGUMENTS_ELEMENTS) {
-    Map* new_map = map();
+    Map* new_map = old_map;
     if (new_elements_kind != elements_kind) {
       MaybeObject* maybe =
           GetElementsTransitionMap(GetIsolate(), new_elements_kind);
@@ -10834,6 +10945,9 @@ MaybeObject* JSObject::SetFastElementsCapacityAndLength(
     PrintElementsTransition(stdout, elements_kind, old_elements,
                             GetElementsKind(), new_elements);
   }
+
+  LOG_INTERNAL_EVENT(GetIsolate(), 
+	EmitObjectEvent(Logger::ElemTransition, this, old_map));
 
   if (IsJSArray()) {
     JSArray::cast(this)->set_length(Smi::FromInt(length));
@@ -10870,6 +10984,7 @@ MaybeObject* JSObject::SetFastDoubleElementsCapacityAndLength(
     if (!maybe_obj->To(&new_map)) return maybe_obj;
   }
 
+  Map* old_map = map();
   FixedArrayBase* old_elements = elements();
   ElementsAccessor* accessor = ElementsAccessor::ForKind(FAST_DOUBLE_ELEMENTS);
   { MaybeObject* maybe_obj =
@@ -10888,6 +11003,9 @@ MaybeObject* JSObject::SetFastDoubleElementsCapacityAndLength(
     PrintElementsTransition(stdout, elements_kind, old_elements,
                             GetElementsKind(), elems);
   }
+
+  LOG_INTERNAL_EVENT(GetIsolate(), 
+	EmitObjectEvent(Logger::ElemTransition, this, old_map));
 
   if (IsJSArray()) {
     JSArray::cast(this)->set_length(Smi::FromInt(length));
@@ -11416,6 +11534,15 @@ Handle<Object> JSObject::SetPrototype(Handle<JSObject> object,
 
   heap->ClearInstanceofCache();
   ASSERT(size == object->Size());
+
+  if ( FLAG_trace_internals ) {
+	LOG(isolate,
+	  EmitObjectEvent(
+	  Logger::ChangePrototype,
+	  *real_receiver)
+	 );
+  }
+
   return value;
 }
 
@@ -11676,6 +11803,7 @@ MaybeObject* JSObject::SetFastElement(uint32_t index,
   if (isolate->is_initial_object_prototype(this) ||
       isolate->is_initial_array_prototype(this)) {
     HandleScope scope(GetIsolate());
+	//LOG_INTERNAL_EVENT(isolate, EmitMapEvent(Logger::BeginDeoptOnMap, this));
     map()->dependent_code()->DeoptimizeDependentCodeGroup(
         GetIsolate(),
         DependentCode::kElementsCantBeAddedGroup);
@@ -11802,6 +11930,7 @@ MaybeObject* JSObject::SetFastElement(uint32_t index,
   if (must_update_array_length) {
     JSArray::cast(this)->set_length(Smi::FromInt(array_length));
   }
+
   return value;
 }
 
@@ -12396,6 +12525,8 @@ MaybeObject* JSObject::TransitionElementsKind(ElementsKind to_kind) {
   if (maybe_failure->IsFailure()) return maybe_failure;
 
   Isolate* isolate = GetIsolate();
+  Map* old_map = map();
+
   if (elements() == isolate->heap()->empty_fixed_array() ||
       (IsFastSmiOrObjectElementsKind(from_kind) &&
        IsFastSmiOrObjectElementsKind(to_kind)) ||
@@ -12412,7 +12543,8 @@ MaybeObject* JSObject::TransitionElementsKind(ElementsKind to_kind) {
       FixedArrayBase* elms = FixedArrayBase::cast(elements());
       PrintElementsTransition(stdout, from_kind, elms, to_kind, elms);
     }
-    return this;
+	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::ElemTransition, this, old_map));
+	return this;
   }
 
   FixedArrayBase* elms = FixedArrayBase::cast(elements());
@@ -12436,7 +12568,7 @@ MaybeObject* JSObject::TransitionElementsKind(ElementsKind to_kind) {
         SetFastDoubleElementsCapacityAndLength(capacity, length);
     if (maybe_result->IsFailure()) return maybe_result;
     ValidateElements();
-    return this;
+	return this;
   }
 
   if (IsFastDoubleElementsKind(from_kind) &&
@@ -12445,7 +12577,7 @@ MaybeObject* JSObject::TransitionElementsKind(ElementsKind to_kind) {
         capacity, length, kDontAllowSmiElements);
     if (maybe_result->IsFailure()) return maybe_result;
     ValidateElements();
-    return this;
+	return this;
   }
 
   // This method should never be called for any other case than the ones
@@ -15139,6 +15271,7 @@ MaybeObject* NameDictionary::TransformPropertiesToFastFor(
     }
   }
 
+  Map* old_map = obj->map();
   int inobject_props = obj->map()->inobject_properties();
 
   // Allocate new map.
@@ -15247,6 +15380,9 @@ MaybeObject* NameDictionary::TransformPropertiesToFastFor(
 
   // Check that it really works.
   ASSERT(obj->HasFastProperties());
+
+  LOG_INTERNAL_EVENT(GetIsolate(),
+	EmitObjectEvent(Logger::PropertyToFastMode, obj, old_map));
 
   return obj;
 }

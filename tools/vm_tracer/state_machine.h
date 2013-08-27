@@ -3,115 +3,194 @@
 #ifndef STATE_MACHINE_H
 #define STATE_MACHINE_H
 
+#include <cstdio>
 #include <string>
 #include <sstream>
 #include <vector>
 #include <map>
 #include <set>
 
-using namespace std;
+using std::string;
+using std::vector;
+using std::set;
+using std::map;
+using std::stringstream;
 
+class Transition;
 class State;
 class StateMachine;
+class ObjectMachine;
+class FunctionMachine;
+class InstanceDescriptor;
 
-// Describe a transition
-struct TransPacket
+
+class CoreInfo
 {
-  string* reason;
-  int extra;
-
-  TransPacket()
-  {
-    reason = NULL;
-    extra = 0;
-  }
-
-  TransPacket(const char* desc)
-  {
-    reason = new string(desc);
-    extra = 0;
-  }
-
-  void clear()
-  {
-    if ( reason != NULL ) {
-      delete reason;
-      reason = NULL;
-    }
-  }
+ public:
+  // States coming here must be stored in any other places before
+  // Hence, we directly compre the pointer values to distinguish them
+  typedef std::vector<State*> RefSet;
   
-  void describe(stringstream& ss) const
-  {
-    ss << *reason;
-    if ( extra != 0 )
-      ss << ": " << extra;
-  }
+ public:
+  RefSet used_by;
   
-  bool operator<(const TransPacket& rhs) const
-  {
-    return (*reason) < *(rhs.reason);
-  }
+ public:
+  CoreInfo();
+  // Record which states use this map
+  void add_usage(State* user_s);
 };
 
-// Describes state transition edge
+
+class Map : public CoreInfo
+{
+public:
+  int map_id;
+
+public:
+  Map(int);
+  int id() const { return map_id; }
+  int& operator*() { return map_id; }
+  void update_map(int);
+
+public:
+  //
+  void correlate(Transition* trans);
+  
+public:
+  vector<FunctionMachine*> deopt_functions;
+};
+
+
+class Code : public CoreInfo
+{
+ public:
+  int code_id;
+
+ public:
+  Code(int);
+  int id() const { return code_id; }
+  int& operator*() { return code_id; }
+
+  //
+  void update_code(int);
+};
+
+
+extern Map* null_map;
+extern Code* null_code;
+
+
+// Find or create a map structure from given map_id
+Map* 
+find_map(int new_map, bool create=true);
+
+// Find or create a code structure
+Code* 
+find_code(int new_code, bool create=true);
+
+
+//
+void 
+register_map_notifier(Map*);
+
+
+//
+void
+record_deopt_function(FunctionMachine*);
+
+
+// Describe a transition
+class TransPacket
+{
+ public:
+  struct ptr_cmp
+  {
+    bool operator()(TransPacket* lhs, TransPacket* rhs)
+    {
+      return (lhs->reason) < (rhs->reason);
+    }
+  };
+
+ public:
+  // The transition that holds this packet
+  Transition* trans;
+  // Why this transition happened?
+  string reason;
+  // Cost of this transition
+  int cost;
+  // For an object event, context is the function where this operation happens
+  StateMachine* context;
+  //
+  int count;
+
+ public:
+  TransPacket();
+  TransPacket(const char* desc);
+  TransPacket(const char* desc, int c_);
+
+  bool has_reason();
+
+  void describe(std::stringstream& ss) const;
+  
+  bool operator<(const TransPacket& rhs) const;
+
+  TransPacket& operator=(const TransPacket& rhs);
+};
+
+
+// Normal state transition edge
 class Transition
 {
  public:
+  enum TransType
+  {
+    TNormal,
+    TSummary
+  };
+
+ public:
   // Transition target
   State *source, *target;
-  // Number of times this transition are repeated
-  int count;
-  // Why did this transition happen?
-  set<TransPacket> triggers;
-
-
- public:  
-  Transition()
-    {
-      source = NULL;
-      target = NULL;
-      count = 0;
-    }
+  // Transision triggering operations and their cost
+  typedef std::set<TransPacket*, TransPacket::ptr_cmp> TpSet; 
+  TpSet triggers;
+  // Last triggering operation
+  TransPacket* last_;
   
-  Transition(State* s_, State* t_)
-    {
-      source = s_;
-      target = t_;
-      count = 0;
-    }
+ public:  
+  Transition();
+   
+  Transition(State* s_, State* t_);
 
-  void insert_reason(const char* r, int extra = 0)
-  {
-    if ( r == NULL ) return;
-    TransPacket tp(r);
+  virtual TransType type() { return TNormal; }
 
-    set<TransPacket>::iterator it = triggers.find(tp);
-    if ( it != triggers.end() ) {
-      tp.clear();
-      tp = *it;
-      triggers.erase(it);
-    }
+  void insert_reason(const char* r, int cost = 0);
 
-    tp.extra += extra;
-    triggers.insert(tp);
-  }
+  void insert_reason(TransPacket* tp);
 
-  void merge_reasons(string& final)
-  {
-    int i = 0;
-    stringstream ss;
-    
-    for ( set<TransPacket>::iterator it = triggers.begin();
-	  it != triggers.end();
-	  ++it ) {
-      if ( i > 0 )
-	ss << '+';
-      it->describe(ss);
-      ++i;
-    }
-    
-    final = ss.str();
-  }
+  void merge_reasons(string& final);
+
+  // Tell the visualizer how to draw this transition
+  virtual const char* graphviz_style();
+};
+
+
+// This transition describes a conceptual walk on another state machine
+// An example usage is cloning a boilerplate
+class SummaryTransition : public Transition
+{
+ public:
+  // From which state on another machine, it exits and returns back
+  State *exit;
+
+ public:
+  SummaryTransition();
+
+  SummaryTransition(State* s_, State* t_, State* exit_ );
+
+  TransType type() { return TSummary; }
+
+  const char* graphviz_style();
 };
 
 
@@ -120,7 +199,7 @@ class Transition
 class State 
 {
  public:
-  struct state_ptr_cmp
+  struct ptr_cmp
   {
     bool operator()(State* lhs, State* rhs)
     {
@@ -128,350 +207,170 @@ class State
     }
   };
   
-  typedef map<State*, Transition*, state_ptr_cmp> TransMap;
+  typedef std::map<State*, Transition*, ptr_cmp> TransMap;
   typedef TransMap::iterator TransIterator;
-  
+
+  enum Stype
+  {
+    SObject,
+    SFunction
+  };
+
  public:
   // ID for this state
   int id;
   // Outgoing transition edges
-  TransMap edges;
+  TransMap out_edges;
+  // Incoming transition edges
+  TransMap in_edges;
   // The state machine that contains this state
   StateMachine* machine;
-  // Instances that own this state
-  set<int> instances;
 
  public:
-  State() 
-    {
-      edges.clear();
-      machine = NULL;
-      instances.clear();
-    }
-  
   // Interfaces
+
+  // Used for state search in set
   virtual bool less_than( const State* ) const = 0;
+  // Make a clone of this state
   virtual State* clone() const = 0;
-  virtual string descriptor() const = 0;
-  virtual void set_core_data(int) = 0;
-  virtual int get_core_data() = 0;
+  // Generate a text description for this state
+  virtual string toString() const = 0;
+  // Generate graphviz style descriptor
+  virtual const char* graphviz_style() const = 0;
+  //
+  virtual Stype type() const = 0;
+  //
+  virtual Map* get_map() const = 0;
+  //
+  virtual void set_map(Map*) = 0;
+
+
+ public:
+  State();
+
+  // Return the number of transitions starting from this state
+  int size();
   
-  // Accessors for transition edges
-  inline TransIterator begin()
-  {
-    return edges.begin();
-  }
+  Transition* find_transition( State* next_s, bool by_boilerplate = false );
+  
+  Transition* add_transition( State* next_s );
 
-  inline TransIterator end()
-  {
-    return edges.end();
-  }
+  Transition* add_summary_transition( State* next_s, State* exit_s );
 
-  inline int size() { return edges.size(); }
-
-  Transition* find_transition( State* next_s )
-  {
-    TransMap::iterator it = edges.find(next_s);
-    if ( it == edges.end() ) return NULL;
-    return it->second;
-  }
-
-  Transition* add_transition( State* next_s )
-  {
-    Transition* trans = new Transition(this, next_s);
-    edges[next_s] = trans;
-    return trans;
-  }
-
-  void add_instance(int d)
-  {
-    instances.insert(d);
-  }
-
-  void remove_instance(int d)
-  {
-    instances.erase(d);
-  }
+  Transition* transfer(State* next_s, ObjectMachine* boilerplate);
 };
 
 
-// Describe function
-class FunctionState : public State
-{
- public:
-  int code;
-  
- public:
-  FunctionState() 
-    { 
-      id = 0;
-      machine = NULL;
-      code = 0;
-    }
-  
-  FunctionState( int my_id )
-    {
-      id = my_id;
-      machine = NULL;
-      code = 0;
-    }
-  
-  FunctionState( int my_id, StateMachine* m )
-    {
-      id = my_id;
-      machine = m;
-      code = 0;
-    }
-  
-  // Implement virtual functions
-  bool less_than(const State* other) const
-  {
-    return code < ((const FunctionState*)other)->code;
-  }
-    
-  State* clone() const
-  {
-    FunctionState* new_s = new FunctionState(id);
-    new_s->code = code;
-    new_s->machine = machine;
-    return new_s;
-  }
-
-  string descriptor() const 
-  {
-    char buf[32];
-    sprintf(buf, "%p", code);
-    return string(buf);
-  }
-
-  void set_core_data(int new_code)
-  {
-    code = new_code;
-  }
-  
-  int get_core_data()
-  {
-    return code;
-  }
-    
-  // Own functions
-  bool operator==(const FunctionState* fs_o) const
-  {
-    return fs_o->code == code;
-  }
-};
-
-
-
-// Describe object
+// Describe an object
 class ObjectState : public State
 {
  public:
-  // Describe the internal structure of object
-  int struct_d;
-
- public:
-  ObjectState() 
-    { 
-      id = 0;
-      machine = NULL;
-      struct_d= 0; 
-    }
+  //
+  Map* map_d;
   
-  ObjectState( int my_id )
-    {
-      id = my_id;
-      machine = NULL;
-      struct_d = 0;
-    }
+ public:
+  ObjectState();
+  ObjectState( int my_id );
 
   // Implement virtual functions
-  bool less_than(const State* other) const
-  {
-    return struct_d < ((const ObjectState*)other)->struct_d;
-  }
-   
-  State* clone() const
-  {
-    ObjectState* new_s = new ObjectState;
-    new_s->struct_d = struct_d;
-    new_s->machine = machine;
-    return new_s;
-  }
+  bool less_than(const State* other) const;   
+  State* clone() const;
+  string toString() const;
+  const char* graphviz_style() const;
+  Stype type() const { return SObject; }
+  Map* get_map() const;
+  void set_map(Map*);
+};
 
-  string descriptor() const 
-  {
-    char buf[32];
-    sprintf(buf, "%p", struct_d);
-    return string(buf);
-  }
 
-  void set_core_data(int new_struct_d)
-  {
-    struct_d = new_struct_d;
-  }
+// Describe a function
+// Function is also an object
+class FunctionState : public ObjectState
+{
+ public:
+  Code* code_d;
+  
+ public:
+  FunctionState();
+  FunctionState( int my_id ); 
+  void set_code(Code*);
+  Code* get_code();
 
-  int get_core_data()
-  {
-    return struct_d;
-  }
-
-  // Own functions
-  bool operator==(const ObjectState* os_o) const
-  {
-    return os_o->struct_d == struct_d;
-  }
+  // Implement virtual functions
+  bool less_than(const State* other) const;
+  State* clone() const;
+  string toString() const;
+  Stype type() const { return SFunction; }
 };
 
 
 // A state machine maintains a collection of states
 class StateMachine
 {
- private:
-  typedef set<State*, State::state_ptr_cmp> StatesPool;
-  
  public:
-  // Record all the states belonging to this machine
-  StatesPool states;
-  // Map object/function instances to state
-  map<int, State*> inst_at;
-  
-  StateMachine()
-    {
-      states.clear();
-      inst_at.clear();
-      m_name.clear();
-    }
+  typedef std::set<State*, State::ptr_cmp> StatesPool;
+
+  enum Mtype {
+    MBoilerplate,
+    MObject,
+    MFunction,
+    MMap,
+    MCount       // Record how many different machines
+  };
+
+  // The only way to create an instance of state machine is calling this static function
+  static StateMachine* NewMachine(Mtype);
 
  public:
-  // Start state of this machine
+  //
+  int id;
+  // Record all the states belonging to this machine
+  StatesPool states;
+  // Map object/function instances to states
+  map<int, State*> inst_at;
+   // Start state of this machine
   State* start;
   // Name of this machine
   string m_name;
+  // Record the type of this machine
+  Mtype type;
   
  public:
-  enum Mtype {
-    TFunction,
-    TObject
-  };
   
-  // Different machines may have different additional actions
-  virtual State* insert_new_state(State* s) = 0;
-  virtual Mtype type() = 0;
-
-  void set_machine_name(const char* name)
-  {
-      m_name.assign(name);
-  }
-
-  bool has_no_name()
-  {
-    return m_name.size() == 0;
-  }
-
-  int size() 
-  { 
-    return states.size(); 
-  }
-
-  // Has the given state been included?
-  State* search_state(State* s)
-  {
-    StatesPool::iterator it = states.find(s);
-    
-    if ( it == states.end() ) {
-      s = insert_new_state(s);
-    }
-    else
-      s = *it;
-    
-    return s;
-  }
-
-  State* get_instance_pos(int d)
-  {
-    State* s = NULL;
-
-    map<int, State*>::iterator it = inst_at.find(d);
-    if ( it == inst_at.end() ) {
-      // Add this instance
-      s = start;
-      inst_at[d] = s;
-      s->add_instance(d);
-    }
-    else {
-      s = it->second;
-    }
-
-    return s;
-  }
-
-  void instance_walk_to(int d, State* new_s)
-  {
-    // Update instance <-> state maps
-    State* prev_s = inst_at[d];
-    prev_s->remove_instance(d);
-
-    inst_at[d] = new_s;
-    new_s->add_instance(d);
-  }
-};
-
-
-// Specialized state machine storing function states only
-class FunctionMachine : public StateMachine
-{
- public:
-  // Code -> states map
-  // States are in different machines
-  typedef map<int, vector<FunctionState*>* > CodeStatesMap;
-  static CodeStatesMap* code_in;
-
- public:
-  // Is this function approved for optimization?
-  bool allow_opt;
-  // Optimization/deoptimization message
-  string optMsg;
+  void set_machine_name(const char* name);
   
- public:
-  FunctionMachine()
-    {
-      allow_opt = true;
-      start = new FunctionState(0, this);
-      states.insert(start);
-    }
+  bool has_name();
 
-  State* insert_new_state(State* s)
-  {
-    // Create a new state
-    FunctionState* fs = (FunctionState*)s->clone();
-    fs->id = states.size();
-    states.insert(fs);
-    
-    // Update code -> states map
-    int code = fs->code;
-    CodeStatesMap::iterator it = code_in->find(code);
-    vector<FunctionState*> *vec = NULL;
+  string toString();
 
-    if ( it == code_in->end() ) {
-      vec = new vector<FunctionState*>;
-      (*code_in)[code] = vec;
-    }
-    else
-      vec = it->second;
-    
-    vec->push_back(fs);
-    
-    return fs;
-  }
+  int size();
 
-  Mtype type() { return TFunction; }
+  // Lookup if the given state has been created for this machine
+  // If not, we copy the content of input state to create a new state
+  State* search_state(State*, bool create=true);
+  // Directly add the input state to states pool
+  void add_state(State*);
+  // Directly delete the input state from states pool
+  void delete_state(State*);
+  // Lookup the state for a particular instance
+  State* get_instance_pos(int d, bool new_instance=false);
+  //
+  void add_instance(int, State*);
+  // Replace an instance name to with a given name
+  void rename_instance(int,int);
+  // Move an instance to another state
+  void migrate_instance(int, Transition*);
 
-  void set_opt_state( bool allow, const char* msg )
-  {
-    allow_opt = allow;
-    optMsg.assign(msg);
-  }
+  // Output graphviz instructions to draw this machine
+  // m_id is used as the id of this machine
+  void draw_graphviz(FILE* file);
+
+ protected:
+  // Not available for instantialization
+  StateMachine();
+
+ private:
+  static int id_counter; 
 };
 
 
@@ -479,24 +378,84 @@ class FunctionMachine : public StateMachine
 class ObjectMachine : public StateMachine
 {
  public:
-  ObjectMachine()
-    {
-      start = new ObjectState(0);
-      states.insert(start);
-    }
+  // Is this objct used as a boilerplate
+  bool is_boilerplate;
 
-  State* insert_new_state(State* s)
-  {
-    // Duplicate
-    ObjectState* os = (ObjectState*)s->clone();
-    os->id = states.size();
-    states.insert(os);
+ public:
+  ObjectMachine();
+  // We have one more constructor because object machine can support other types
+  ObjectMachine(StateMachine::Mtype);
 
-    return os;
-  }
+  // A specialized version of searching only object states
+  State* search_state(Map*, bool=true);
 
-  Mtype type() { return TObject; }
+  // Get exit state
+  // If all instances are in the same state, we return this state as exit state
+  // Otherwise it returns null
+  State* exit_state();
+
+  //
+  ObjectState* jump_to_state_with_map(InstanceDescriptor*, int, bool);
+
+  // Set transition that just sets map of an instance
+  Transition* set_instance_map(InstanceDescriptor*, int map_d);
+
+  //
+  Transition* evolve(InstanceDescriptor*, int, int, ObjectMachine*, const char*, int = 0, bool = false );
+
+ public:
+  static ObjectState temp_o;
 };
 
+
+// Specialized state machine storing function states only
+class FunctionMachine : public ObjectMachine
+{
+ public:
+  //
+  bool been_optimized;
+  // Is this function approved for optimization?
+  bool allow_opt;
+  // Optimization/deoptimization message
+  std::string optMsg;
+   
+ public:
+  FunctionMachine();
+
+  // A specialized version of searching only function states
+  State* search_state(Map*, Code*, bool=true);
+  
+  //
+  void set_opt_state( bool allow, const char* msg );
+
+  // Evolve to the next state
+  Transition* evolve(InstanceDescriptor*, int, int, const char*, int = 0, bool = false);
+
+ public:
+  static FunctionState temp_f;
+};
+
+
+class InstanceDescriptor
+{
+ public:
+  // Internal id
+  int id;
+  // State machine that contains this instance
+  StateMachine* sm;
+  // Last transition for this intance
+  Transition* last_raw_transition;
+  // The operation history for this instance
+  std::vector<TransPacket*> history;
+
+ public:
+  InstanceDescriptor() { 
+    id = -1; 
+    sm = NULL;
+    last_raw_transition = NULL;
+  }
+
+  void add_operation(TransPacket* tp) { history.push_back(tp); }
+};
 
 #endif
