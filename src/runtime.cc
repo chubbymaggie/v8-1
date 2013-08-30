@@ -8201,7 +8201,7 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_InstallRecompiledCode) {
 	  );
   }*/
 
-  return function->code;
+  return function->code();
 }
 
 
@@ -10956,7 +10956,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_GetFrameDetails) {
 
   int count = 0;
   JavaScriptFrameIterator it(isolate, id);
-  JavaScriptFrame* js_frame = it.frame();
 
   for (; !it.done(); it.Advance()) {
     if (index < count + it.frame()->GetInlineCount()) break;

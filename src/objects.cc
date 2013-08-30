@@ -1571,7 +1571,7 @@ void HeapObject::HeapObjectShortPrint(StringStream* accumulator) {
   }
 }
 
-
+  /*
 void HeapObject::set_map(Map* value) {
   set_map_word(MapWord::FromMap(value));
   if (value != NULL) {
@@ -1580,16 +1580,16 @@ void HeapObject::set_map(Map* value) {
     value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
   }
 
-  /*if ( FLAG_trace_internals && IsJSObject() ) {
+  if ( FLAG_trace_internals && IsJSObject() ) {
 	Isolate* isolate = GetIsolate();
 	LOG( isolate,
 	  EmitObjectEvent(
 	  Logger::SetMap,
 	  JSObject::cast(this))
 	 );
-  }*/
+  }
 }
-
+*/
 
 void HeapObject::Iterate(ObjectVisitor* v) {
   // Handle header

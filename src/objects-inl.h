@@ -1209,15 +1209,14 @@ Map* HeapObject::map() {
 }
 
 
-//void HeapObject::set_map(Map* value) {
-//  set_map_word(MapWord::FromMap(value));
-//  if (value != NULL) {
-//    // TODO(1600) We are passing NULL as a slot because maps can never be on
-//    // evacuation candidate.
-//    value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
-//  }
-//}
-
+void HeapObject::set_map(Map* value) {
+  set_map_word(MapWord::FromMap(value));
+  if (value != NULL) {
+    // TODO(1600) We are passing NULL as a slot because maps can never be on
+    // evacuation candidate.
+    value->GetHeap()->incremental_marking()->RecordWrite(this, NULL, value);
+  }
+}
 
 // Unsafe accessor omitting write barrier.
 void HeapObject::set_map_no_write_barrier(Map* value) {
@@ -4868,7 +4867,6 @@ void SharedFunctionInfo::TryReenableOptimization(const char* reason) {
   }
 
   if ( FLAG_trace_internals ) {
-	Code* code = this->code();
 	LOG( GetIsolate(),
 		  EmitFunctionEvent(
 			Logger::ReenableOpt,
