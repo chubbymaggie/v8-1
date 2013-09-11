@@ -9,9 +9,30 @@
 
 using std::deque;
 
+// Used for inferring why functions are forced to deoptimize
+void
+record_force_deopt_function(FunctionMachine*);
+
 
 void
-infer_deoptimization_reason(int, Map*);
+print_machine_path(deque<Transition*>&);
+
+
+void
+print_instance_path(vector<TransPacket*> &, int);
+
+
+void
+ops_result_in_force_deopt(Transition*);
+
+
+void
+sys_result_in_force_deopt(const char*);
+
+
+// Guess why a function is deoptimized eagerly/softly/lazily
+bool
+infer_deoptimization_reason(int, Map*, FunctionMachine*);
 
 
 #endif

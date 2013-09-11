@@ -16,7 +16,7 @@
 const char* input_file = NULL;
 const char* visual_file = NULL;
 int slice_sig = -1;
-int states_count_limit = 10;
+int states_count_limit = 14;
 
 
 static int 
@@ -41,7 +41,7 @@ parse_options(int argc, char** argv)
     case 'h':
       printf( "Usage: %s [options] input_file\n", argv[0] );
       printf( "Options:\n");
-      printf( "-c [default=4]       : Only machines at least have specified states are generated.\n" );
+      printf( "-c [default=4]       : Only machines have more than specified states and edges are visualized.\n" );
       printf( "-v [file]            : Output graphviz file for visualization\n" );
       printf( "-s [signature]       : Output a log slice of specified function/object\n" );
       printf( "-h        : Print this help.\n" );
@@ -63,15 +63,17 @@ int main(int argc, char** argv)
 {
   if ( parse_options(argc, argv) == 0 )
     return -1;
-
-if ( !build_automata(input_file) ) {
+  
+  if ( !build_automata(input_file) ) {
     printf( "Error in building automata, stop.\n" );
     return -1;
   }
-
-  if ( visual_file != NULL )
-    visualize_machines(visual_file);
-
+  
+  if ( visual_file != NULL ) {
+    char f_buf[256];
+    sprintf( f_buf, "%s-final", visual_file );
+    visualize_machines(f_buf);
+  }
   
   clean_machines();
 

@@ -2183,11 +2183,14 @@ bool Isolate::Init(Deserializer* des) {
   heap_profiler_ = new HeapProfiler(heap());
 
   // Xiao's extension
-  opt_code_fail_pair_ = new HeapObject*[2];
-  opt_code_fail_pair_[0] = opt_code_fail_pair_[1] = NULL;
-  callnew_pair_ = new HeapObject*[2];
-  callnew_pair_[0] = callnew_pair_[1] = NULL;
-  //PrintF("%p %p\n", opt_code_fail_pair_, callnew_pair_);
+	const int __size = 100;
+  opt_code_fail_pair_ = new HeapObject*[__size];
+	callnew_pair_ = new HeapObject*[__size];
+
+	for ( int i = 0; i < __size; ++i ) {
+		opt_code_fail_pair_[i] = NULL;  
+		callnew_pair_[i] = NULL;
+	}
 
   // Enable logging before setting up the heap
   logger_->SetUp(this);

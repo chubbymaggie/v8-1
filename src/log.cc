@@ -648,41 +648,64 @@ void Logger::CodeDeoptEvent(Code* code) {
 }
 
 
-void Logger::ConsFunctionName(LogMessageBuilder& msg, SharedFunctionInfo* shared)
+// Construct a human readable function descriptor
+static void ConsFunctionName(Isolate* isolate, LogMessageBuilder& msg, SharedFunctionInfo* shared)
 {
   // Compute the position of this function in source code
   int line_num = -1;
   if ( shared != NULL ) {
-	Object* maybe_script = shared->script();
-	if ( maybe_script->IsScript() ) {
-	  HandleScope scope(isolate_);
-	  Handle<Script> script(Script::cast(maybe_script));
-	  line_num = GetScriptLineNumber( script, 
-		  								shared->start_position()) + 1;
-	}
+		Object* maybe_script = shared->script();
+		if ( maybe_script->IsScript() ) {
+			HandleScope scope(isolate);
+			Handle<Script> script(Script::cast(maybe_script));
+			line_num = GetScriptLineNumber( script, 
+		  									shared->start_position()) + 1;
+		}
   }
 
   if ( line_num == -1 ) {
-	if ( shared == isolate_->array_function()->shared() )
-	  msg.Append("G-Array");
-	else
-	  msg.Append("G-Object");
-	return;
+		if ( shared == isolate->array_function()->shared() )
+			msg.Append("G-Array");
+		else
+			msg.Append("G-Object");
+		return;
   }
 
   // Inspect the name of this function
   String* f_name = NULL;
-  if ( shared != NULL ) f_name = shared->DebugName(); 
-  if ( f_name != NULL && 
-		f_name->length() > 0 ) {
-	SmartArrayPointer<char> c_f_name = f_name->ToCString();
-	msg.Append("%s", *c_f_name);
-  }
-  else {
-	msg.Append("Closure");
+		if ( shared != NULL ) f_name = shared->DebugName(); 
+		if ( f_name != NULL && 
+			f_name->length() > 0 ) {
+			SmartArrayPointer<char> c_f_name = f_name->ToCString();
+			msg.Append("%s", *c_f_name);
+		}
+		else {
+		msg.Append("Closure");
   }
 
   msg.Append("@L%d", line_num);
+}
+
+
+// Obtain current JS top frame
+static JSFunction* get_events_happen_context(Isolate* isolate)
+{
+	JavaScriptFrameIterator it(isolate);
+	JSFunction* context = NULL;
+
+	while ( !it.done() && it.frame()->IsConstructor() )
+	  it.Advance();
+
+	if ( !it.done() ) {
+		JavaScriptFrame* frame = it.frame();
+		Object* def_function_or_smi = frame->function();
+
+		if ( def_function_or_smi->IsJSFunction() ) {
+		context = JSFunction::cast(def_function_or_smi);
+		}
+	}
+
+	return context;
 }
 
 
@@ -693,24 +716,12 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
   LogMessageBuilder msg(this);
 
   // Obtain the topmost jsfunction activation
-  // Using frame iterator excludes the outmost global function
-  JavaScriptFrameIterator it(isolate_);
-  JSFunction* def_function = NULL;
-
-  if ( !it.done() ) {
-	JavaScriptFrame* frame = it.frame();
-	Object* def_function_or_smi = frame->function();
-
-	if ( def_function_or_smi->IsJSFunction() ) {
-	  def_function = JSFunction::cast(def_function_or_smi);
-	}
-  }
+  JSFunction* def_function = get_events_happen_context(isolate_);
 
   msg.Append( "%d %p %p",
 	event,
 	def_function,
 	obj);
-
 
   // In case some events need more options
   va_list arg_ptr;
@@ -744,7 +755,7 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	  
 	  // Print the name of elcosing function for log readability
 	  if ( def_function != NULL )
-		ConsFunctionName(msg, def_function->shared());
+		ConsFunctionName(isolate_, msg, def_function->shared());
 	  else
 		msg.Append("global");
 
@@ -765,7 +776,7 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	  // Obtain the name for the constructor function
 	  msg.Append(" New(");
 	  SharedFunctionInfo* shared = constructor->shared();
-	  ConsFunctionName(msg, shared);
+	  ConsFunctionName(isolate_, msg, shared);
 	  msg.Append(")");
 	}
 	break;
@@ -780,7 +791,7 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	  JSFunction* function = JSFunction::cast(obj);
 	  Code* code = function->code();
 	  msg.Append(" %p %p %p ", alloc_sig, cur_map, code);
-	  ConsFunctionName(msg, SharedFunctionInfo::cast(alloc_sig));
+	  ConsFunctionName(isolate_, msg, SharedFunctionInfo::cast(alloc_sig));
 	}
 	break;
 
@@ -793,11 +804,24 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	}
 	break;
 
-  case ChangePrototype:
+  case ChangeFuncPrototype:
 	{
 	  // Introduce a new map
-	  msg.Append(" %p %p", 
-		cur_map, cur_map->prototype());
+		va_start(arg_ptr, obj);
+	  JSObject* new_proto = va_arg(arg_ptr, JSObject*);
+	  va_end(arg_ptr);
+	  msg.Append(" %p", new_proto);
+	}
+	break;
+
+	case ChangeObjPrototype:
+	{
+	  // Introduce a new map
+		va_start(arg_ptr, obj);
+		Map* old_map = va_arg(arg_ptr, Map*);
+	  JSObject* new_proto = va_arg(arg_ptr, JSObject*);
+	  va_end(arg_ptr);
+	  msg.Append(" %p %p %p", old_map, cur_map, new_proto);
 	}
 	break;
 
@@ -808,9 +832,18 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	}
 	break;
 
+  case MigrateToMap:
+	{
+		va_start(arg_ptr, obj);
+	  Map* old_map = va_arg(arg_ptr, Map*);
+	  va_end(arg_ptr);
+		msg.Append(" %p %p", old_map, cur_map);
+	}
+	break;
+
   case NewField:
   case DelField:
-  case WriteFieldTransition:
+  case UpdateField:
 	{
 	  va_start(arg_ptr, obj);
 	  Name* f_name = va_arg(arg_ptr, Name*);
@@ -826,7 +859,7 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 		msg.Append(" %s", *(s->ToCString()));
 	  }
 	  else
-		msg.Append(" unknown_f");
+		msg.Append(" ?field");
 	}
 	break;
 
@@ -841,6 +874,7 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	}
 	// Fall through
   case CowCopy:
+  case ExpandArray:
 	{
 	  ElementsKind kind = cur_map->elements_kind();
 	  int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
@@ -874,23 +908,6 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	  msg.Append(" %p %p", old_map, cur_map);
 	}
 	break;
-
- // case ExpandArray:
-	//{
-	//  ElementsKind kind = cur_map->elements_kind();
-	//  int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
-
-	//  // Now we compute how many data are copied
-	//  va_start(arg_ptr, obj);
-	//  // Obtain the array capacity before growing
-	//  int old_capacity = va_arg(arg_ptr, int);
-	//  va_end(arg_ptr);
-
-	//  int cur_capacity = obj->elements()->length();
-	//  int bytes = base_size * (old_capacity+cur_capacity);
-	//  msg.Append( " %d", bytes );
-	//}
-	//break;
 
   default:
 	break;
@@ -968,7 +985,7 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 
   case RegularDeopt:
 	{
-	  // Deoptimization message
+	  // Deoptimization information
 	  va_start(arg_ptr, shared);
 	  Code* old_code = va_arg(arg_ptr, Code*);
 	  HeapObject* failed_obj = va_arg(arg_ptr, HeapObject*);
@@ -976,9 +993,13 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	  const char* add_msg = va_arg(arg_ptr, const char*);
 	  va_end(arg_ptr);
 
+	  // Context of this deoptimization
+	  JSFunction* context =  get_events_happen_context(isolate_);
+
 	  // Perhaps sometimes we miss code generation
 	  // We also output the old code to indicate this case, :<
-	  msg.Append(" %p %p %p %p %s", 
+	  msg.Append(" %p %p %p %p %p %s", 
+		context,
 		old_code, new_code, 
 		failed_obj, expected_map,
 		add_msg);
@@ -993,7 +1014,11 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	  JSFunction* real_deopt_func = va_arg(arg_ptr, JSFunction*);
 	  va_end(arg_ptr);
 
-	  msg.Append( " %p %p %p", old_code, new_code, real_deopt_func ); 
+	  JSFunction* context =  get_events_happen_context(isolate_);
+	  msg.Append( " %p %p %p %p", 
+		  context,
+		  old_code, new_code, 
+		  real_deopt_func ); 
 	}
 	break;
 
@@ -1003,7 +1028,9 @@ void Logger::EmitFunctionEvent(InternalEvent event, JSFunction* func,
 	  Code* old_code = va_arg(arg_ptr, Code*);
 	  va_end(arg_ptr);
 
-	  msg.Append(" %p %p",
+	  JSFunction* context =  get_events_happen_context(isolate_);
+	  msg.Append(" %p %p %p",
+		context,
 		old_code,
 		new_code); 
 	}
@@ -1074,13 +1101,6 @@ void Logger::EmitGCMoveEvent(HeapObject* from, HeapObject* to)
 }
 
 
-// Sample useage
-//if ( FLAG_trace_internals ) {
-//	Isolate* isolate = GetIsolate();
-//	LOG( isolate,
-//	  EmitOtherEvent(Logger::ForDebug, "d1")
-//	  );
-//  }
 void Logger::EmitSysEvent(InternalEvent event, ...)
 {
   if (!log_->IsEnabled()) return;
@@ -1088,18 +1108,18 @@ void Logger::EmitSysEvent(InternalEvent event, ...)
   LogMessageBuilder msg(this);
   msg.Append("%d", event);
 
-  va_list arg_ptr;
+  //va_list arg_ptr;
 
   switch( event ) {
   case NotifyStackDeoptAll:
 	break;
 
-  case ForDebug:
+  case SetCheckpoint:
 	{
-	  va_start(arg_ptr, event);
-	  const char* s = va_arg(arg_ptr, const char*);
+	  /*va_start(arg_ptr, event);
+	  int checkpoint_id = va_arg(arg_ptr, int);
 	  va_end(arg_ptr);
-	  msg.Append(" %s", s);
+	  msg.Append(" %d", checkpoint_id);*/
 	}
 	break;
 

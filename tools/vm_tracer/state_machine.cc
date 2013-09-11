@@ -3,6 +3,7 @@
 
 #include <queue>
 #include "state_machine.h"
+#include "miner.hh"
 
 using namespace std;
 
@@ -18,12 +19,6 @@ Map* null_map = new Map(-1);
 Code* null_code = new Code(-1);
 
 static Map* map_notifier = NULL;
-
-
-
-CoreInfo::CoreInfo()
-{
-}
 
 
 void CoreInfo::add_usage(State* user_s)
@@ -44,73 +39,15 @@ void Map::update_map(int new_id)
   all_maps.erase(map_id);
   all_maps[new_id] = this;
 
-  // Update states record for machines use this map
-  RefSet::iterator it = used_by.begin();
-  RefSet::iterator end = used_by.end();
-
-  for ( ; it != end; ++it ) {
-    State* s = *it;
-    StateMachine *sm = s->machine;
-    sm->delete_state(s);
-  }
-
   // Now we change the map id to new id
   map_id = new_id;
-  
-  // We add the states back their machines
-  it = used_by.begin();
-  for ( ; it != end; ++it ) {
-    State* s = *it;
-    StateMachine *sm = s->machine;
-    sm->add_state(s);
-  }
 }
 
 
-void Map::correlate(Transition* trans)
+void Map::do_notify(Transition* trans)
 {
-  vector<FunctionMachine*>::iterator it_funcs;
-
-  if ( deopt_functions.size() == 0 ) return;
-  
-  printf( "Force deoptimization detected:\n" );
-
-  if ( trans != NULL ) {
-    TransPacket* tp = trans->last_;
-    StateMachine* trigger_obj = trans->source->machine;
-    
-    string def_func_name;
-    if ( tp->context != NULL )
-      def_func_name = tp->context->toString();
-    else
-      def_func_name = "global";
-    
-    string &action = tp->reason;
-    string obj_name = trigger_obj->toString();
-    
-    printf( "\tIn [%s], operation <%s> on object [%s]\n",
-	    def_func_name.c_str(),
-	    action.c_str(),
-	    obj_name.c_str() );
-  }
-  else {
-    printf( "\t(?)\n" );
-  }
-
-  printf( "\t===>\n" );
-  
-  // Iterate the deoptimized functions
-  for ( it_funcs = deopt_functions.begin();
-	it_funcs != deopt_functions.end(); ++it_funcs ) {
-    FunctionMachine* fm = *it_funcs;
-    string fm_name = fm->toString();
-    
-    printf( "\t [%s]\n", fm_name.c_str() );
-  }
-  
-  printf( "\n" );
-  
-  deopt_functions.clear();
+  if (map_notifier == this )
+    ops_result_in_force_deopt(trans);
 }
 
 
@@ -129,6 +66,17 @@ Map* find_map(int new_map, bool create)
     res = it->second;
   
   return res;
+}
+
+
+void 
+register_map_notifier(Map* r)
+{
+  if ( map_notifier != NULL )
+    // Perhaps we miss recording some operations
+    ops_result_in_force_deopt(NULL);
+
+  map_notifier = r;
 }
 
 
@@ -161,26 +109,6 @@ Code* find_code(int new_code, bool create)
     res = it->second;
   
   return res;
-}
-
-
-void 
-register_map_notifier(Map* r)
-{
-  if ( map_notifier != NULL )
-    // Perhaps we miss recording some operations
-    map_notifier->correlate(NULL);
-
-  map_notifier = r;
-}
-
-
-//
-void
-record_deopt_function(FunctionMachine* f)
-{
-  if ( map_notifier != NULL && f->has_name())
-    map_notifier->deopt_functions.push_back(f);
 }
 
 
@@ -222,8 +150,13 @@ bool TransPacket::has_reason()
   
 void TransPacket::describe(stringstream& ss) const
 {
-  if ( count > 1 ) ss << count;
-  ss << "(" << reason << ")";
+  if ( count > 1 ) ss << count << "*";
+  ss << "(";
+  if ( context != NULL ) {
+    ss << context->toString();
+    ss << ", ";
+  }
+  ss << reason << ")";
 }
 
 
@@ -426,6 +359,19 @@ State::transfer(State* maybe_next_s, ObjectMachine* boilerplate)
 }
 
 
+void State::set_map(Map* new_map)
+{
+  map_d = new_map;
+  map_d->add_usage(this);
+}
+
+
+Map* State::get_map() const
+{
+  return map_d;
+}
+
+
 ObjectState::ObjectState() 
 { 
   id = 0;
@@ -439,18 +385,6 @@ ObjectState::ObjectState( int my_id )
   id = my_id;
   machine = NULL;
   map_d = null_map;
-}
-
-
-void ObjectState::set_map(Map* new_map)
-{
-  map_d = new_map;
-  map_d->add_usage(this);
-}
-
-Map* ObjectState::get_map() const
-{
-  return map_d;
 }
 
 
@@ -474,7 +408,7 @@ string ObjectState::toString() const
   stringstream ss;
 
   if ( id == 0 )
-    ss << machine->m_name;
+    ss << "START";
   else
     ss << hex << map_d->map_id;
   
@@ -487,7 +421,7 @@ const char* ObjectState::graphviz_style() const
 
   if ( id == 0 )
     // id = 0 indicates this is the starting state
-    style = "shape=doublecircle";
+    style = "shape=diamond, style=rounded";
   else
     style = "shape=egg"; 
   
@@ -560,7 +494,7 @@ string FunctionState::toString() const
   stringstream ss;
 
   if ( id == 0 )
-    ss << machine->m_name;
+    ss << "START";
   else
     ss << hex << code_d->code_id;
   
@@ -597,9 +531,13 @@ StateMachine* StateMachine::NewMachine( StateMachine::Mtype type )
 
 StateMachine::StateMachine()
 {
+  id = -1;
   states.clear();
   inst_at.clear();
   m_name.clear();
+  start = NULL;
+  type = MCount;
+  has_changed = false;
 }
 
 
@@ -619,7 +557,11 @@ string StateMachine::toString()
 {
   stringstream ss;
 
-  ss << m_name << "(G-" << id << ")";
+  if ( m_name.size() != 0 )
+    ss << m_name;
+  else
+    ss << "(G" << id << ")";
+
   return ss.str();
 }
 
@@ -668,6 +610,7 @@ void StateMachine::add_state(State* s)
 
 void StateMachine::delete_state(State* s)
 {
+  // FIX: delete the incoming edges
   states.erase(s);
 }
 
@@ -723,7 +666,7 @@ void StateMachine::migrate_instance(int ins_d, Transition* trans)
   
   // Call monitoring action
   Map* src_map = ((ObjectState*)src)->get_map();
-  src_map->correlate(trans);
+  src_map->do_notify(trans);
 }
 
 
@@ -755,7 +698,7 @@ StateMachine::draw_graphviz(FILE* file)
 	    "\t%d [%s, label=\"%s\"];\n", 
 	    id, 
 	    cur_s->graphviz_style(),
-	    cur_s->toString().c_str());
+	    cur_s == init_state ? toString().c_str() : cur_s->toString().c_str());
     
     // We draw the transition edges
     State::TransIterator it, end;
@@ -852,20 +795,23 @@ ObjectMachine::jump_to_state_with_map(InstanceDescriptor* i_desc, int exp_map_id
       states.insert(exp_s);
       
       // And we make a link to this state
-      Transition* trans = start->transfer(exp_s, NULL);
+      Transition* trans = cur_s->transfer(exp_s, NULL);
       trans->insert_reason("?", 0);
     }
 
     // Next, we check if some operations in middle migrate objects to this state
     vector<TransPacket*> &history = i_desc->history;
     int i;
-    for ( i = history.size() - 1; i > -1; --i ) {
+    int size = history.size();
+    int end = (size > 10 ? size - 10 : -1 );
+    for ( i = size - 1; i > end; --i ) {
       TransPacket* tp = history[i];
       if ( exp_s == tp->trans->source ) break;
     }
-    if ( i > -1 ) {
-      // Yes, some recorded operations did this
+    if ( i > end ) {
+      // Yes, some recorded operations transfer this object
       // It's not a missing link
+      // But currently I don't know how to deal with it
     }
     else {
       inst_at[ins_id] = exp_s;
@@ -877,7 +823,7 @@ ObjectMachine::jump_to_state_with_map(InstanceDescriptor* i_desc, int exp_map_id
 }
 
 
-Transition* ObjectMachine::set_instance_map(InstanceDescriptor* i_desc, int map_id)
+Transition* ObjectMachine::set_instance_map(InstanceDescriptor* i_desc, int map_id, bool make_transition)
 {
   int ins_id = i_desc->id;
 
@@ -890,8 +836,11 @@ Transition* ObjectMachine::set_instance_map(InstanceDescriptor* i_desc, int map_
   temp_o.map_d = find_map(map_id);
   temp_o.machine = this;
   
-  // We do not insert any transfer packet for this transition temporarilly
-  Transition* trans = cur_s->transfer( &temp_o, NULL );
+  Transition* trans = NULL;
+  if ( make_transition ) {
+    // We do not insert any transfer packet for this transition
+    trans = cur_s->transfer( &temp_o, NULL );
+  }
   
   return trans;
 }
@@ -921,6 +870,7 @@ ObjectMachine::evolve(InstanceDescriptor* i_desc, int old_map_id, int map_id,
   // Record this action
   i_desc->add_operation(trans->last_);
 
+  has_changed = true;
   return trans;
 }
 
@@ -928,8 +878,14 @@ ObjectMachine::evolve(InstanceDescriptor* i_desc, int old_map_id, int map_id,
 FunctionMachine::FunctionMachine()
 {
   type = StateMachine::MFunction;
-  been_optimized = false;
   allow_opt = true;
+  opt_count = 0;
+  deopt_count = 0;
+  ic_miss_count = 0;
+  ops_count = 0;
+  last_op = NULL;
+  
+  // Initialize the first state
   start = new FunctionState(0);
   start->machine = this;
   states.insert(start);
@@ -976,6 +932,7 @@ FunctionMachine::evolve(InstanceDescriptor* i_desc, int map_id, int code_id,
   //
   i_desc->add_operation(trans->last_);
 
+  has_changed = true;
   return trans;
 }
 

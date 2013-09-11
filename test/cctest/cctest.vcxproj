@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -15,23 +15,17 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>cctest</RootNamespace>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
   <PropertyGroup Label="Configuration">
     <CharacterSet>Unicode</CharacterSet>
     <ConfigurationType>Application</ConfigurationType>
   </PropertyGroup>
-  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <PlatformToolset>v110</PlatformToolset>
-  </PropertyGroup>
-  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <PlatformToolset>v110</PlatformToolset>
-  </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
+  <ImportGroup Label="ExtensionSettings"/>
   <ImportGroup Label="PropertySheets">
-    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"/>
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros"/>
   <PropertyGroup>
     <ExecutablePath>$(ExecutablePath);$(MSBuildProjectDirectory)\..\..\third_party\cygwin\bin\;$(MSBuildProjectDirectory)\..\..\third_party\python_26\</ExecutablePath>
     <OutDir>..\..\build\$(Configuration)\</OutDir>
@@ -116,77 +110,77 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="cctest.gyp" />
+    <None Include="cctest.gyp"/>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="test-circular-queue.cc" />
-    <ClCompile Include="test-dataflow.cc" />
-    <ClCompile Include="gay-shortest.cc" />
-    <ClCompile Include="test-flags.cc" />
-    <ClCompile Include="test-fixed-dtoa.cc" />
-    <ClCompile Include="test-symbols.cc" />
-    <ClCompile Include="test-decls.cc" />
-    <ClCompile Include="test-fast-dtoa.cc" />
-    <ClCompile Include="test-dtoa.cc" />
-    <ClCompile Include="test-double.cc" />
-    <ClCompile Include="test-hashing.cc" />
-    <ClCompile Include="test-utils.cc" />
-    <ClCompile Include="test-log.cc" />
-    <ClCompile Include="test-version.cc" />
-    <ClCompile Include="gay-precision.cc" />
-    <ClCompile Include="test-func-name-inference.cc" />
-    <ClCompile Include="test-sockets.cc" />
-    <ClCompile Include="test-mark-compact.cc" />
-    <ClCompile Include="test-declarative-accessors.cc" />
-    <ClCompile Include="test-object-observe.cc" />
-    <ClCompile Include="test-bignum-dtoa.cc" />
-    <ClCompile Include="test-types.cc" />
-    <ClCompile Include="test-threads.cc" />
-    <ClCompile Include="test-accessors.cc" />
-    <ClCompile Include="test-ast.cc" />
-    <ClCompile Include="test-weakmaps.cc" />
-    <ClCompile Include="test-strtod.cc" />
-    <ClCompile Include="test-global-object.cc" />
-    <ClCompile Include="test-deoptimization.cc" />
-    <ClCompile Include="test-disasm-ia32.cc" />
-    <ClCompile Include="test-platform-tls.cc" />
-    <ClCompile Include="test-regexp.cc" />
-    <ClCompile Include="test-cpu-profiler.cc" />
-    <ClCompile Include="test-dictionary.cc" />
-    <ClCompile Include="test-list.cc" />
-    <ClCompile Include="test-bignum.cc" />
-    <ClCompile Include="test-reloc-info.cc" />
-    <ClCompile Include="test-serialize.cc" />
-    <ClCompile Include="test-compare-nil-ic-stub.cc" />
-    <ClCompile Include="test-diy-fp.cc" />
-    <ClCompile Include="test-lockers.cc" />
-    <ClCompile Include="test-debug.cc" />
-    <ClCompile Include="test-weaktypedarrays.cc" />
-    <ClCompile Include="test-profile-generator.cc" />
-    <ClCompile Include="test-conversions.cc" />
-    <ClCompile Include="test-api.cc" />
-    <ClCompile Include="cctest.cc" />
-    <ClCompile Include="test-liveedit.cc" />
-    <ClCompile Include="test-spaces.cc" />
-    <ClCompile Include="test-log-stack-tracer.cc" />
-    <ClCompile Include="gay-fixed.cc" />
-    <ClCompile Include="test-heap.cc" />
-    <ClCompile Include="test-hashmap.cc" />
-    <ClCompile Include="test-global-handles.cc" />
-    <ClCompile Include="test-thread-termination.cc" />
-    <ClCompile Include="test-heap-profiler.cc" />
-    <ClCompile Include="test-platform.cc" />
-    <ClCompile Include="test-alloc.cc" />
-    <ClCompile Include="test-assembler-ia32.cc" />
-    <ClCompile Include="test-compiler.cc" />
-    <ClCompile Include="test-parsing.cc" />
-    <ClCompile Include="test-random.cc" />
-    <ClCompile Include="test-unbound-queue.cc" />
-    <ClCompile Include="test-lock.cc" />
-    <ClCompile Include="test-strings.cc" />
-    <ClCompile Include="test-platform-win32.cc" />
-    <ClCompile Include="test-date.cc" />
-    <ClCompile Include="$(OutDir)obj\global_intermediate\resources.cc" />
+    <ClCompile Include="test-circular-queue.cc"/>
+    <ClCompile Include="test-dataflow.cc"/>
+    <ClCompile Include="gay-shortest.cc"/>
+    <ClCompile Include="test-flags.cc"/>
+    <ClCompile Include="test-fixed-dtoa.cc"/>
+    <ClCompile Include="test-symbols.cc"/>
+    <ClCompile Include="test-decls.cc"/>
+    <ClCompile Include="test-fast-dtoa.cc"/>
+    <ClCompile Include="test-dtoa.cc"/>
+    <ClCompile Include="test-double.cc"/>
+    <ClCompile Include="test-hashing.cc"/>
+    <ClCompile Include="test-utils.cc"/>
+    <ClCompile Include="test-log.cc"/>
+    <ClCompile Include="test-version.cc"/>
+    <ClCompile Include="gay-precision.cc"/>
+    <ClCompile Include="test-func-name-inference.cc"/>
+    <ClCompile Include="test-sockets.cc"/>
+    <ClCompile Include="test-mark-compact.cc"/>
+    <ClCompile Include="test-declarative-accessors.cc"/>
+    <ClCompile Include="test-object-observe.cc"/>
+    <ClCompile Include="test-bignum-dtoa.cc"/>
+    <ClCompile Include="test-types.cc"/>
+    <ClCompile Include="test-threads.cc"/>
+    <ClCompile Include="test-accessors.cc"/>
+    <ClCompile Include="test-ast.cc"/>
+    <ClCompile Include="test-weakmaps.cc"/>
+    <ClCompile Include="test-strtod.cc"/>
+    <ClCompile Include="test-global-object.cc"/>
+    <ClCompile Include="test-deoptimization.cc"/>
+    <ClCompile Include="test-disasm-ia32.cc"/>
+    <ClCompile Include="test-platform-tls.cc"/>
+    <ClCompile Include="test-regexp.cc"/>
+    <ClCompile Include="test-cpu-profiler.cc"/>
+    <ClCompile Include="test-dictionary.cc"/>
+    <ClCompile Include="test-list.cc"/>
+    <ClCompile Include="test-bignum.cc"/>
+    <ClCompile Include="test-reloc-info.cc"/>
+    <ClCompile Include="test-serialize.cc"/>
+    <ClCompile Include="test-compare-nil-ic-stub.cc"/>
+    <ClCompile Include="test-diy-fp.cc"/>
+    <ClCompile Include="test-lockers.cc"/>
+    <ClCompile Include="test-debug.cc"/>
+    <ClCompile Include="test-weaktypedarrays.cc"/>
+    <ClCompile Include="test-profile-generator.cc"/>
+    <ClCompile Include="test-conversions.cc"/>
+    <ClCompile Include="test-api.cc"/>
+    <ClCompile Include="cctest.cc"/>
+    <ClCompile Include="test-liveedit.cc"/>
+    <ClCompile Include="test-spaces.cc"/>
+    <ClCompile Include="test-log-stack-tracer.cc"/>
+    <ClCompile Include="gay-fixed.cc"/>
+    <ClCompile Include="test-heap.cc"/>
+    <ClCompile Include="test-hashmap.cc"/>
+    <ClCompile Include="test-global-handles.cc"/>
+    <ClCompile Include="test-thread-termination.cc"/>
+    <ClCompile Include="test-heap-profiler.cc"/>
+    <ClCompile Include="test-platform.cc"/>
+    <ClCompile Include="test-alloc.cc"/>
+    <ClCompile Include="test-assembler-ia32.cc"/>
+    <ClCompile Include="test-compiler.cc"/>
+    <ClCompile Include="test-parsing.cc"/>
+    <ClCompile Include="test-random.cc"/>
+    <ClCompile Include="test-unbound-queue.cc"/>
+    <ClCompile Include="test-lock.cc"/>
+    <ClCompile Include="test-strings.cc"/>
+    <ClCompile Include="test-platform-win32.cc"/>
+    <ClCompile Include="test-date.cc"/>
+    <ClCompile Include="$(OutDir)obj\global_intermediate\resources.cc"/>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="resources.vcxproj">
@@ -201,8 +195,8 @@
       <Project>{7CDDE45F-CBCD-6CF7-2C53-E1B4B9FDB2AC}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
-    <ProjectReference Include="../../tools/gyp/v8_snapshot.vcxproj">
-      <Project>{7DDFF8DA-A989-62DF-DC18-90E38B1F5D4B}</Project>
+    <ProjectReference Include="../../tools/gyp/v8_nosnapshot.ia32.vcxproj">
+      <Project>{4D718A23-78D4-11D6-7273-841D1840E2C9}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
     <ProjectReference Include="../../tools/gyp/js2c.vcxproj">
@@ -210,6 +204,6 @@
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
+  <ImportGroup Label="ExtensionTargets"/>
 </Project>

@@ -277,10 +277,13 @@ class LCodeGen BASE_EMBEDDED {
                     LEnvironment* environment,
                     Deoptimizer::BailoutType bailout_type);
 
-  // Expected map can be passed in either ways but not both
-  void DeoptimizeIf(Condition cc, LEnvironment* environment, 
-	Register deopt_obj = no_reg, 
-	Handle<Map> expected_map = Handle<Map>::null(), Register reg_expected_map = no_reg );
+  void DeoptimizeIf(Condition cc, LEnvironment* environment);
+
+	// Expected map can be passed in as a constant or stored in a register
+	void DeoptimizeTrace(Condition cc, LEnvironment* environment, 
+											Register deopt_obj,
+											Handle<Map> expected_map,
+											Register reg_expected_map = no_reg);
 
   void SoftDeoptimize(LEnvironment* environment);
 

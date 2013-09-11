@@ -911,11 +911,22 @@ void LCodeGen::DeoptimizeIf(Condition cc,
 }
 
 
-void LCodeGen::DeoptimizeIf(Condition cc,
-                            LEnvironment* environment,
-							Register deopt_obj,
-							Handle<Map> expected_map,
-							Register reg_expected_map) {
+void LCodeGen::DeoptimizeIf(Condition cc, LEnvironment* environment) {
+  bool is_stub = info()->IsStub();
+  Deoptimizer::BailoutType bailout_type = is_stub
+      ? Deoptimizer::LAZY
+      : Deoptimizer::EAGER;
+
+  DeoptimizeIf(cc, environment, bailout_type);
+}
+
+
+void LCodeGen::DeoptimizeTrace(Condition cc, 
+															LEnvironment* environment,
+															Register deopt_obj,
+															Handle<Map> expected_map,
+															Register reg_expected_map ) {
+
   bool is_stub = info()->IsStub();
   Deoptimizer::BailoutType bailout_type = is_stub
       ? Deoptimizer::LAZY
@@ -925,42 +936,47 @@ void LCodeGen::DeoptimizeIf(Condition cc,
   Label no_log;
 
   if ( do_log ) {
-	Isolate* isolate = info()->isolate();
+		Isolate* isolate = info()->isolate();
 	  
-	if ( cc != no_condition )
-	  __ j(NegateCondition(cc), &no_log, Label::kNear);
+		if ( cc != no_condition )
+			__ j(NegateCondition(cc), &no_log, Label::kNear);
 
-	int i = 0;
-	for ( ; i < Register::kNumRegisters; ++i )
-	  if ( deopt_obj.code() != i )
-		break;
+		int i = 0;
+		for ( ; i < Register::kNumRegisters; ++i )
+			if ( deopt_obj.code() != i ) break;
 
-	Register failed_pair_ptr = Register::from_code(i);
+		Register deopt_info = Register::from_code(i);
+		//const int prototype_map_offset = 0;
+		const int failed_object_offset = 0;
+		const int exp_map_offset = failed_object_offset + kPointerSize;
 
-	// Save registers
-	__ push(failed_pair_ptr);
+		// Save registers
+		__ push(deopt_info);
 
-	// We write information into global data area
-	__ mov(failed_pair_ptr, Immediate(ExternalReference(isolate->get_opt_code_fail_pair())));
-	__ mov(Operand(failed_pair_ptr, 0), deopt_obj);
-	if ( !expected_map.is_null() )
-	  __ mov(Operand(failed_pair_ptr, kPointerSize), Immediate(expected_map));
-	else if ( !reg_expected_map.is(no_reg) )
-	  __ mov(Operand(failed_pair_ptr, kPointerSize), reg_expected_map);
-	else
-	  __ mov(Operand(failed_pair_ptr, kPointerSize), Immediate(0));
+		// Obtain global deopt info pointer
+		__ mov(deopt_info, Immediate(ExternalReference(isolate->get_opt_code_fail_pair())));
+		// Is this deopt incurred by prototype check fail or not
+		/*int chk_type_id = (environment->is_check_prototype_map() ? 1 : 0);
+		__ mov(Operand(deopt_info, prototype_map_offset), Immediate(chk_type_id));*/
+		// Object that checks map failed
+		__ mov(Operand(deopt_info, failed_object_offset), deopt_obj);
 
-	// Restore registers
-	__ pop(failed_pair_ptr);
+		// Expected map
+		if ( !expected_map.is_null() )
+			__ mov(Operand(deopt_info, exp_map_offset), Immediate(expected_map));
+		else if ( !reg_expected_map.is(no_reg) )
+			__ mov(Operand(deopt_info, exp_map_offset), reg_expected_map);
+
+		// Restore registers
+		__ pop(deopt_info);
   }
 
   DeoptimizeIf(cc, environment, bailout_type);
 
   if ( do_log ) {
-	__ bind(&no_log);
+		__ bind(&no_log);
   }
 }
-
 
 void LCodeGen::SoftDeoptimize(LEnvironment* environment) {
   ASSERT(!info()->IsStub());
@@ -3024,7 +3040,7 @@ void LCodeGen::EmitLoadFieldOrConstantFunction(Register result,
       __ LoadHeapObject(result, current);
       __ cmp(FieldOperand(result, HeapObject::kMapOffset),
                           Handle<Map>(current->map()));
-	  DeoptimizeIf(not_equal, env, result, Handle<Map>(current->map()));
+			DeoptimizeTrace(not_equal, env, result, Handle<Map>(current->map()));
       current =
           Handle<HeapObject>(HeapObject::cast(current->map()->prototype()));
     }
@@ -3093,7 +3109,7 @@ void LCodeGen::DoLoadNamedFieldPolymorphic(LLoadNamedFieldPolymorphic* instr) {
     Label check_passed;
     __ CompareMap(object, map, &check_passed);
     if (last && !need_generic) {
-      DeoptimizeIf(not_equal, instr->environment(), object, map);
+      DeoptimizeTrace(not_equal, instr->environment(), object, map);
       __ bind(&check_passed);
       EmitLoadFieldOrConstantFunction(
           result, object, map, name, instr->environment());
@@ -5781,7 +5797,7 @@ void LCodeGen::DoCheckMapCommon(Register reg,
                                 LInstruction* instr) {
   Label success;
   __ CompareMap(reg, map, &success);
-  DeoptimizeIf(not_equal, instr->environment(), reg, map);
+  DeoptimizeTrace(not_equal, instr->environment(), reg, map);
   __ bind(&success);
 }
 
@@ -6533,7 +6549,7 @@ void LCodeGen::DoForInPrepareMap(LForInPrepareMap* instr) {
 
   __ cmp(FieldOperand(eax, HeapObject::kMapOffset),
          isolate()->factory()->meta_map());
-  DeoptimizeIf(not_equal, instr->environment());
+  DeoptimizeTrace(not_equal, instr->environment(), eax, isolate()->factory()->meta_map());
   __ bind(&use_cache);
 }
 
@@ -6562,9 +6578,10 @@ void LCodeGen::DoForInCacheArray(LForInCacheArray* instr) {
 
 void LCodeGen::DoCheckMapValue(LCheckMapValue* instr) {
   Register object = ToRegister(instr->value());
-  __ cmp(ToRegister(instr->map()),
+	Register cur_map = ToRegister(instr->map()); 
+  __ cmp(cur_map,
          FieldOperand(object, HeapObject::kMapOffset));
-  DeoptimizeIf(not_equal, instr->environment(), object, Handle<Map>::null(), ToRegister(instr->map()));
+  DeoptimizeTrace(not_equal, instr->environment(), object, Handle<Map>::null(), cur_map);
 }
 
 

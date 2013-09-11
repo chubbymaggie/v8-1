@@ -342,7 +342,7 @@ class Logger {
   void LogRuntime(Vector<const char> format, JSArray* args);
 
   // ==== Events logged by --trace-internals ===
-#define OBJECT_EVENTS_LIST(V)						     \
+#define OBJECT_EVENTS_LIST(V)													\
 	V(CreateObjBoilerplate,	create_obj_boilerplate)		  \
 	V(CreateArrayBoilerplate, create_array_boilerplate)	  \
 	V(CreateObjectLiteral,   create_object_literal)        \
@@ -350,14 +350,17 @@ class Logger {
 	V(CreateNewObject,		 create_new_object)                \
 	V(CreateNewArray,		 create_new_array)				  \
 	V(CreateFunction,       create_function)			  \
-	V(CopyObject,			copy_object)				  \
-	V(ChangePrototype,		change_prototype)			  \
-	V(SetMap,				set_map)					  \
+	V(CopyObject,			copy_object)								 \
+	V(ChangeFuncPrototype,		change_func_prototype)			  \
+	V(ChangeObjPrototype,		change_obj_prototype)			  \
+	V(SetMap,				set_map)										  \
+	V(MigrateToMap,			migrate_to_map)				  \
 	V(NewField,	            new_field)	                  \
-	V(DelField,				del_field)					  \
-	V(WriteFieldTransition,	write_field_transition)		  \
+	V(DelField,				del_field)											\
+	V(UpdateField,	update_field)								\
 	V(ElemTransition,		elem_transition)			  \
-	V(CowCopy,				cow_copy)					  \
+	V(CowCopy,				cow_copy)											 \
+	V(ExpandArray,			expand_array)							 \
 	V(ElemToSlowMode,       elem_to_slow)                 \
 	V(PropertyToSlowMode,   prop_to_slow)				  \
 	V(ElemToFastMode,       elem_to_fast)                 \
@@ -384,7 +387,7 @@ class Logger {
 	V(GCMoveShared,			gc_move_shared)				  \
 	V(GCMoveMap,			gc_move_map)	  			  \
 	V(NotifyStackDeoptAll,	notify_stack_deopt_all)		  \
-	V(ForDebug,				for_debug)
+	V(SetCheckpoint,		set_checkpoint		)
 
   enum InternalEvent {
 #define GetEventName(name, handler) name,
@@ -468,9 +471,6 @@ class Logger {
 
   explicit Logger(Isolate* isolate);
   ~Logger();
-
-  // We build a readable function name
-  void ConsFunctionName(LogMessageBuilder&, SharedFunctionInfo*);
 
   // Issue code notifications.
   void IssueCodeAddedEvent(Code* code,

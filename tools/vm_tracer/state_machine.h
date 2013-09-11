@@ -29,13 +29,12 @@ class CoreInfo
  public:
   // States coming here must be stored in any other places before
   // Hence, we directly compre the pointer values to distinguish them
-  typedef std::vector<State*> RefSet;
+  typedef vector<State*> RefSet;
   
  public:
   RefSet used_by;
   
  public:
-  CoreInfo();
   // Record which states use this map
   void add_usage(State* user_s);
 };
@@ -48,16 +47,11 @@ public:
 
 public:
   Map(int);
+  
   int id() const { return map_id; }
   int& operator*() { return map_id; }
   void update_map(int);
-
-public:
-  //
-  void correlate(Transition* trans);
-  
-public:
-  vector<FunctionMachine*> deopt_functions;
+  void do_notify(Transition*);
 };
 
 
@@ -70,8 +64,6 @@ class Code : public CoreInfo
   Code(int);
   int id() const { return code_id; }
   int& operator*() { return code_id; }
-
-  //
   void update_code(int);
 };
 
@@ -92,11 +84,6 @@ find_code(int new_code, bool create=true);
 //
 void 
 register_map_notifier(Map*);
-
-
-//
-void
-record_deopt_function(FunctionMachine*);
 
 
 // Describe a transition
@@ -130,7 +117,7 @@ class TransPacket
 
   bool has_reason();
 
-  void describe(std::stringstream& ss) const;
+  void describe(stringstream& ss) const;
   
   bool operator<(const TransPacket& rhs) const;
 
@@ -152,7 +139,7 @@ class Transition
   // Transition target
   State *source, *target;
   // Transision triggering operations and their cost
-  typedef std::set<TransPacket*, TransPacket::ptr_cmp> TpSet; 
+  typedef set<TransPacket*, TransPacket::ptr_cmp> TpSet; 
   TpSet triggers;
   // Last triggering operation
   TransPacket* last_;
@@ -207,7 +194,7 @@ class State
     }
   };
   
-  typedef std::map<State*, Transition*, ptr_cmp> TransMap;
+  typedef map<State*, Transition*, ptr_cmp> TransMap;
   typedef TransMap::iterator TransIterator;
 
   enum Stype
@@ -225,7 +212,9 @@ class State
   TransMap in_edges;
   // The state machine that contains this state
   StateMachine* machine;
-
+  // Every object has a map
+  Map* map_d;
+  
  public:
   // Interfaces
 
@@ -237,12 +226,8 @@ class State
   virtual string toString() const = 0;
   // Generate graphviz style descriptor
   virtual const char* graphviz_style() const = 0;
-  //
+  // Get the type of this object
   virtual Stype type() const = 0;
-  //
-  virtual Map* get_map() const = 0;
-  //
-  virtual void set_map(Map*) = 0;
 
 
  public:
@@ -250,24 +235,24 @@ class State
 
   // Return the number of transitions starting from this state
   int size();
-  
+  //
   Transition* find_transition( State* next_s, bool by_boilerplate = false );
-  
+  //
   Transition* add_transition( State* next_s );
-
+  //
   Transition* add_summary_transition( State* next_s, State* exit_s );
-
+  //
   Transition* transfer(State* next_s, ObjectMachine* boilerplate);
+  //
+  Map* get_map() const;
+  //
+  void set_map(Map*);
 };
 
 
 // Describe an object
 class ObjectState : public State
-{
- public:
-  //
-  Map* map_d;
-  
+{ 
  public:
   ObjectState();
   ObjectState( int my_id );
@@ -278,8 +263,6 @@ class ObjectState : public State
   string toString() const;
   const char* graphviz_style() const;
   Stype type() const { return SObject; }
-  Map* get_map() const;
-  void set_map(Map*);
 };
 
 
@@ -308,7 +291,7 @@ class FunctionState : public ObjectState
 class StateMachine
 {
  public:
-  typedef std::set<State*, State::ptr_cmp> StatesPool;
+  typedef set<State*, State::ptr_cmp> StatesPool;
 
   enum Mtype {
     MBoilerplate,
@@ -334,7 +317,9 @@ class StateMachine
   string m_name;
   // Record the type of this machine
   Mtype type;
-  
+  // For checkpointing delta operations
+  bool has_changed;
+
  public:
   
   void set_machine_name(const char* name);
@@ -398,9 +383,9 @@ class ObjectMachine : public StateMachine
   ObjectState* jump_to_state_with_map(InstanceDescriptor*, int, bool);
 
   // Set transition that just sets map of an instance
-  Transition* set_instance_map(InstanceDescriptor*, int map_d);
+  Transition* set_instance_map(InstanceDescriptor*, int map_d, bool make_transition = true);
 
-  //
+  // Models an event
   Transition* evolve(InstanceDescriptor*, int, int, ObjectMachine*, const char*, int = 0, bool = false );
 
  public:
@@ -412,12 +397,20 @@ class ObjectMachine : public StateMachine
 class FunctionMachine : public ObjectMachine
 {
  public:
-  //
-  bool been_optimized;
   // Is this function approved for optimization?
   bool allow_opt;
+  // How many times this function has been optimized?
+  int opt_count;
+  // How many times this function has been deoptimized?
+  int deopt_count;
+  // Record how many times deopt is caused by uncaught type in the training phase
+  int ic_miss_count;
+  // How many recorded operations happen in this function?
+  int ops_count;
+  // The last operation executed within this function
+  TransPacket* last_op;
   // Optimization/deoptimization message
-  std::string optMsg;
+  string optMsg;
    
  public:
   FunctionMachine();
@@ -425,7 +418,7 @@ class FunctionMachine : public ObjectMachine
   // A specialized version of searching only function states
   State* search_state(Map*, Code*, bool=true);
   
-  //
+  // Enable or disable optimization
   void set_opt_state( bool allow, const char* msg );
 
   // Evolve to the next state
@@ -446,7 +439,7 @@ class InstanceDescriptor
   // Last transition for this intance
   Transition* last_raw_transition;
   // The operation history for this instance
-  std::vector<TransPacket*> history;
+  vector<TransPacket*> history;
 
  public:
   InstanceDescriptor() { 

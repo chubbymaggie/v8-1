@@ -530,7 +530,7 @@ DEFINE_int(random_seed, 0,
 DEFINE_bool(use_verbose_printer, true, "allows verbose printing")
 
 // parser.cc
-DEFINE_bool(allow_natives_syntax, false, "allow natives syntax")
+DEFINE_bool(allow_natives_syntax, true, "allow natives syntax")
 DEFINE_bool(trace_parse, false, "trace parsing and preparsing")
 
 // simulator-arm.cc and simulator-mips.cc
@@ -744,7 +744,6 @@ DEFINE_implication(log_internal_timer_events, prof)
 
 // Xiao's extension
 DEFINE_bool(trace_internals, false, "Trace internal states evolutioin graphs for performance debugging")
-DEFINE_bool(trace_open, false, "Just open v8 tracing facility")
 
 //
 // Disassembler only flags

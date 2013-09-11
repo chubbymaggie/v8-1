@@ -1149,23 +1149,27 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
                                                    kind, length,
                                                    new_capacity);
 
+  // We log array growing action
+	//if ( FLAG_trace_internals ) {
+	//	//HValue* context = environment()->LookupContext();
+	//	// Push the runtime call parameters
+	//	Add<HPushArgument>(Add<HConstant>(Logger::ExpandArray));
+	//	Add<HPushArgument>(object);
+	//	Add<HPushArgument>(graph()->GetConstantUndefined());
+
+	//	Add<HCallRuntime>(context,
+	//		isolate()->factory()->empty_string(),
+	//		Runtime::FunctionForId(Runtime::kLogObjectManipulate),
+	//		3);
+	//	AddSimulate(BailoutId::None());
+	//}
+
   environment()->Push(new_elements);
 
-  // We log array growing action
-  if ( FLAG_trace_internals ) {
-	// Push the runtime call parameters
-	Add<HPushArgument>(Add<HConstant>(Logger::ElemTransition));
-	Add<HPushArgument>(object);
-	Add<HPushArgument>(graph()->GetConstantNull());
-
-    Add<HCallRuntime>(context,
-	  isolate()->factory()->empty_string(),
-      Runtime::FunctionForId(Runtime::kLogObjectManipulate),
-      3);
-  }
   capacity_checker.Else();
 
   environment()->Push(elements);
+
   capacity_checker.End();
 
   if (is_js_array) {
@@ -1209,16 +1213,16 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
 
   environment()->Push(new_elements);
 
-  if ( FLAG_trace_internals ) {
-	Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
-	Add<HPushArgument>(object);
-	Add<HPushArgument>(graph()->GetConstantNull());
+  /*if ( FLAG_trace_internals ) {
+		Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
+		Add<HPushArgument>(object);
+		Add<HPushArgument>(graph()->GetConstantNull());
 
     Add<HCallRuntime>(environment()->LookupContext(),
 	  isolate()->factory()->empty_string(),
       Runtime::FunctionForId(Runtime::kLogObjectManipulate),
       3);
-  }
+  }*/
 
   cow_checker.Else();
 

@@ -825,7 +825,7 @@ void Deoptimizer::DoComputeOutputFrames() {
 	  // function_ may be a SMI, which indicates a builtin function
 	  SharedFunctionInfo* shared = function_->shared();
 	  Code* code = shared->code();
-	  HeapObject** deopt_roots = isolate()->get_opt_code_fail_pair();
+	  HeapObject** deopt_info = isolate()->get_opt_code_fail_pair();
 	  char buf[48];
 	  sprintf(buf, "%s@%d", MessageFor(bailout_type_), bailout_id_);
 
@@ -840,11 +840,11 @@ void Deoptimizer::DoComputeOutputFrames() {
 			code,
 			shared, 
 			compiled_code_, 
-			deopt_roots[0], deopt_roots[1], 
+			deopt_info[0], deopt_info[1], 
 			buf )
 		);
 
-	  deopt_roots[0] = deopt_roots[1] = NULL;
+	  deopt_info[0] = deopt_info[1] = NULL;
   }
 }
 

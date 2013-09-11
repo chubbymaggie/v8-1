@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -15,23 +15,17 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>v8_snapshot</RootNamespace>
   </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props"/>
   <PropertyGroup Label="Configuration">
     <CharacterSet>Unicode</CharacterSet>
     <ConfigurationType>StaticLibrary</ConfigurationType>
   </PropertyGroup>
-  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <PlatformToolset>v110</PlatformToolset>
-  </PropertyGroup>
-  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <PlatformToolset>v110</PlatformToolset>
-  </PropertyGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props"/>
+  <ImportGroup Label="ExtensionSettings"/>
   <ImportGroup Label="PropertySheets">
-    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" />
+    <Import Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"/>
   </ImportGroup>
-  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="UserMacros"/>
   <PropertyGroup>
     <ExecutablePath>$(ExecutablePath);$(MSBuildProjectDirectory)\..\..\third_party\cygwin\bin\;$(MSBuildProjectDirectory)\..\..\third_party\python_26\</ExecutablePath>
     <OutDir>..\..\build\$(Configuration)\</OutDir>
@@ -116,17 +110,17 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <None Include="v8.gyp" />
+    <None Include="v8.gyp"/>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(OutDir)obj\global_intermediate\experimental-libraries.cc" />
-    <ClCompile Include="$(OutDir)obj\global_intermediate\libraries.cc" />
-    <ClCompile Include="$(IntDir)\snapshot.cc" />
+    <ClCompile Include="$(OutDir)obj\global_intermediate\experimental-libraries.cc"/>
+    <ClCompile Include="$(OutDir)obj\global_intermediate\libraries.cc"/>
+    <ClCompile Include="$(IntDir)\snapshot.cc"/>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="$(OutDir)\mksnapshot.ia32.exe">
       <FileType>Document</FileType>
-      <Command>call call "$(ProjectDir)..\..\third_party\cygwin\setup_env.bat" &amp;&amp; set CYGWIN=nontsec&amp;&amp; set INTDIR=$(IntDir)&amp;&amp; set OUTDIR=$(OutDir)&amp;&amp; bash -c "\"`cygpath -m \\\"${OUTDIR}\\\"`/mksnapshot.ia32.exe\" \"--log-snapshot-positions\" \"--logfile\" \"`cygpath -m \\\"${INTDIR}\\\"`/snapshot.log\" \"`cygpath -m \\\"${INTDIR}\\\"`/snapshot.cc\""</Command>
+      <Command>call call &quot;$(ProjectDir)..\..\third_party\cygwin\setup_env.bat&quot; &amp;&amp; set CYGWIN=nontsec&amp;&amp; set INTDIR=$(IntDir)&amp;&amp; set OUTDIR=$(OutDir)&amp;&amp; bash -c &quot;\&quot;`cygpath -m \\\&quot;${OUTDIR}\\\&quot;`/mksnapshot.ia32.exe\&quot; \&quot;--log-snapshot-positions\&quot; \&quot;--logfile\&quot; \&quot;`cygpath -m \\\&quot;${INTDIR}\\\&quot;`/snapshot.log\&quot; \&quot;`cygpath -m \\\&quot;${INTDIR}\\\&quot;`/snapshot.cc\&quot;&quot;</Command>
       <Message>run_mksnapshot</Message>
       <Outputs>$(IntDir)\snapshot.cc</Outputs>
     </CustomBuild>
@@ -141,6 +135,6 @@
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets"/>
+  <ImportGroup Label="ExtensionTargets"/>
 </Project>

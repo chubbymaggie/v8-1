@@ -440,6 +440,7 @@ namespace internal {
   F(LogNewArray, 1, 1) \
   F(LogFunctionCreate, 1, 1) \
   F(LogObjectManipulate, 3, 1) \
+	F(LogSetCheckpoint, 0, 1) \
   /* ES5 */ \
   F(LocalKeys, 1, 1) \
   /* Cache suport */ \

@@ -535,7 +535,8 @@ class LEnvironment: public ZoneObject {
         is_uint32_(value_count, zone),
         outer_(outer),
         entry_(entry),
-        zone_(zone) { }
+        zone_(zone),
+	      check_prototype_map(false) { }
 
   Handle<JSFunction> closure() const { return closure_; }
   FrameType frame_type() const { return frame_type_; }
@@ -587,6 +588,12 @@ class LEnvironment: public ZoneObject {
 
   void PrintTo(StringStream* stream);
 
+	void set_check_prototype_map(bool v) {
+		check_prototype_map = v;
+	}
+
+	bool is_check_prototype_map() { return check_prototype_map == true; }
+
  private:
   Handle<JSFunction> closure_;
   FrameType frame_type_;
@@ -597,6 +604,7 @@ class LEnvironment: public ZoneObject {
   int translation_size_;
   int parameter_count_;
   int pc_offset_;
+	bool check_prototype_map;
 
   // Value array: [parameters] [locals] [expression stack] [de-materialized].
   //              |>--------- translation_size ---------<|

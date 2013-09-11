@@ -12,7 +12,7 @@ using namespace std;
 
 // Events types
 enum InternalEvent {
-#define GetEventName(name, handler) name,
+#define GetEventName(name, handler, desc) name,
   
   OBJECT_EVENTS_LIST(GetEventName)
   FUNCTION_EVENTS_LIST(GetEventName)
@@ -30,7 +30,7 @@ typedef void (*EventHandler)(FILE*);
 
 
 // Handler declarations
-#define DeclEventHandler(name, handler)		\
+#define DeclEventHandler(name, handler, desc)	\
   static void handler(FILE*);
 
 OBJECT_EVENTS_LIST(DeclEventHandler)
@@ -46,7 +46,7 @@ null_handler(FILE* file) { }
 
 // Fill in the hanlder list
 EventHandler handlers[] = {
-#define GetEventHandler(name, handler) handler,
+#define GetEventHandler(name, handler, desc) handler,
 
   OBJECT_EVENTS_LIST(GetEventHandler)
   FUNCTION_EVENTS_LIST(GetEventHandler)
@@ -55,6 +55,20 @@ EventHandler handlers[] = {
 
   null_handler
 #undef GetEventHandler
+};
+
+
+// Fill in the dscriptions
+const char* events_descriptions[] = {
+#define GetDescription(name, handler, desc) desc,
+
+  OBJECT_EVENTS_LIST(GetDescription)
+  FUNCTION_EVENTS_LIST(GetDescription)
+  MAP_EVENTS_LIST(GetDescription)
+  SYS_EVENTS_LIST(GetDescription)
+
+  "."
+#undef GetDescription
 };
 
 
@@ -67,24 +81,75 @@ static map<int, InstanceDescriptor*> instances[StateMachine::MCount];
 // Internal id counters
 static int id_counter[StateMachine::MCount];
 
+//
+static int checkpoint_id = 1;
 
-// --------------Helper functions
+
+// --------------Helper functions-----------------------
 static InstanceDescriptor*
 install_context(int context, Transition* trans)
 {
-  StateMachine* sm = NULL;
-  InstanceDescriptor* i_desc = NULL;
-
-  if ( context != 0 ) {
-    i_desc = find_instance(context, StateMachine::MFunction, true, true);
-    sm = i_desc->sm;
-  }
+  // We create a context function if any
+  InstanceDescriptor* i_desc = find_instance(context, StateMachine::MFunction, true, true);
+  FunctionMachine* sm = (FunctionMachine*)i_desc->sm;
 
   // Fix: We directly replace the last context, this might be a problem
   TransPacket* tp = trans->last_;
   tp->context = sm;
+  sm->ops_count++;
+  sm->last_op = tp;
 
   return i_desc;
+}
+
+
+static InstanceDescriptor*
+lookup_object(int o_addr)
+{
+  InstanceDescriptor* i_desc = find_instance(o_addr, StateMachine::MBoilerplate);
+  if ( i_desc == NULL )
+    i_desc = find_instance(o_addr, StateMachine::MObject, true, true);
+  return i_desc;
+}
+
+
+// Just make a transition without additional semantics
+static Transition*
+SimpleObjectTransition( int context, int o_addr, int old_map_id, int map_id, const char* msg, int cost = 0 )
+{
+  InstanceDescriptor* i_desc = lookup_object(o_addr);
+  ObjectMachine* osm = (ObjectMachine*)i_desc->sm;
+  Transition* trans = osm->evolve(i_desc, old_map_id, map_id, NULL, msg, cost);
+
+  // Install context
+  install_context(context, trans);
+  return trans;
+}
+
+
+// If the last transition is a set map operation, just replace it
+// Otherwise call SimpleObjectTransition
+static Transition*
+ReplaceSetMapTransition( int context, int o_addr, int old_map_id, int map_id, const char* msg, int cost = 0 )
+{
+  InstanceDescriptor* i_desc = lookup_object(o_addr);
+  Transition* trans;
+  
+  if ( i_desc->last_raw_transition != NULL ) {
+    // We just fill up the last transition
+    StateMachine* sm = i_desc->sm;
+    trans = i_desc->last_raw_transition;
+    trans->insert_reason(msg, cost);
+    sm->migrate_instance(i_desc->id, trans);
+    i_desc->last_raw_transition = NULL;
+    // Install context
+    install_context(context, trans);
+  }
+  else {
+    trans = SimpleObjectTransition( context, o_addr, old_map_id, map_id, msg, cost );
+  }
+  
+  return trans;
 }
 
 
@@ -131,14 +196,14 @@ create_boilerplate_common(FILE* file, const char* msg)
 static void 
 create_obj_boilerplate(FILE* file)
 {
-  create_boilerplate_common(file, "NewObj");
+  create_boilerplate_common(file, events_descriptions[CreateObjBoilerplate]);
 }
 
 
 static void 
 create_array_boilerplate(FILE* file)
 {
-  create_boilerplate_common(file, "NewAry");
+  create_boilerplate_common(file, events_descriptions[CreateArrayBoilerplate]);
 }
 
 
@@ -212,35 +277,35 @@ create_obj_common(FILE* file, StateMachine::Mtype type, const char* msg)
 static void 
 create_object_literal(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, "NewObjLit");
+  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateObjectLiteral]);
 }
 
 
 static void 
 create_array_literal(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, "NewArrayLit");
+  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateArrayLiteral]);
 }
 
 
 static void 
 create_new_object(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, "NewObj");
+  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateNewObject]);
 }
 
 
 static void 
 create_new_array(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, "NewArray");
+  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateNewArray]);
 }
 
 
 static void
 create_function(FILE* file)
 {
-  create_obj_common(file, StateMachine::MFunction, "NewFunc");
+  create_obj_common(file, StateMachine::MFunction, events_descriptions[CreateFunction]);
 }
 
 
@@ -267,70 +332,43 @@ copy_object(FILE* file)
 }
 
 
-static InstanceDescriptor*
-lookup_object(int o_addr)
+static void
+change_func_prototype(FILE* file)
 {
-  InstanceDescriptor* i_desc = find_instance(o_addr, StateMachine::MBoilerplate);
-  if ( i_desc == NULL )
-    i_desc = find_instance(o_addr, StateMachine::MObject, true, true);
-  return i_desc;
-}
-
-
-// Just make a transition without additional semantics
-static Transition*
-SimpleObjectTransition( int context, int o_addr, int old_map_id, int map_id, const char* msg, int cost = 0 )
-{
-  InstanceDescriptor* i_desc = lookup_object(o_addr);
-  ObjectMachine* osm = (ObjectMachine*)i_desc->sm;
-  Transition* trans = osm->evolve(i_desc, old_map_id, map_id, NULL, msg, cost);
-
-  // Install context
-  install_context(context, trans);
-  return trans;
-}
-
-
-// If the last transition is a set map operation, just replace it
-// Otherwise call SimpleObjectTransition
-static Transition*
-ReplaceSetMapTransition( int context, int o_addr, int old_map_id, int map_id, const char* msg, int cost = 0 )
-{
-  InstanceDescriptor* i_desc = lookup_object(o_addr);
-  Transition* trans;
+  int def_function;
+  int o_addr;
+  int proto;
+  char msg[128];
   
-  if ( i_desc->last_raw_transition != NULL ) {
-    // We just fill up the last transition
-    StateMachine* sm = i_desc->sm;
-    trans = i_desc->last_raw_transition;
-    trans->insert_reason(msg, cost);
-    sm->migrate_instance(i_desc->id, trans);
-    i_desc->last_raw_transition = NULL;
-    // Install context
-    install_context(context, trans);
-  }
-  else {
-    trans = SimpleObjectTransition( context, o_addr, old_map_id, map_id, msg, cost );
-  }
-  
-  return trans;
+  fscanf( file, "%p %p %p",
+	  &def_function,
+	  &o_addr, &proto );
+  /*
+  sprintf(msg, "%s: %p",
+	  events_descriptions[ChangeFuncPrototype], proto);
+  ReplaceSetMapTransition( def_function, o_addr, -1, map_id, msg );
+  */
 }
 
 
 static void
-change_prototype(FILE* file)
+change_obj_prototype(FILE* file)
 {
   int def_function;
   int o_addr;
-  int map_id, proto;
+  int old_map_id, new_map_id;
+  int proto;
   char msg[128];
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%p %p %p %p %p",
 	  &def_function,
-	  &o_addr, &map_id, &proto );
+	  &o_addr, 
+	  &old_map_id, &new_map_id, 
+	  &proto );
   
-  sprintf(msg, "ChgProto: %p", proto);
-  ReplaceSetMapTransition( def_function, o_addr, -1, map_id, msg );
+  sprintf(msg, "%s: %p",
+	  events_descriptions[ChangeObjPrototype], proto);
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, new_map_id, msg );
 }
 
 
@@ -348,6 +386,22 @@ set_map(FILE* file)
   InstanceDescriptor* i_desc = lookup_object(o_addr);
   ObjectMachine* osm = (ObjectMachine*)i_desc->sm;
   i_desc->last_raw_transition = osm->set_instance_map(i_desc, map_id);
+}
+
+
+static void
+migrate_to_map(FILE* file)
+{
+  int def_function;
+  int o_addr;
+  int old_map_id, map_id;
+
+  fscanf( file, "%p %p %p %p",
+	  &def_function,
+	  &o_addr, 
+	  &old_map_id, &map_id );
+  
+  SimpleObjectTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[MigrateToMap] );
 }
 
 
@@ -372,7 +426,7 @@ static void
 new_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "NewFld: ");
+  sprintf( msg, "%s: ", events_descriptions[NewField]);
   field_update_common(file, msg);
 }
 
@@ -381,16 +435,16 @@ static void
 del_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "DelFld: ");
+  sprintf( msg, "%s: ", events_descriptions[DelField]);
   field_update_common(file, msg);
 }
 
 
 static void
-write_field_transition(FILE* file)
+update_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "ChgFld: ");
+  sprintf( msg, "%s: ", events_descriptions[UpdateField]);
   field_update_common(file, msg);
 }
 
@@ -409,7 +463,7 @@ elem_transition(FILE* file)
 	  &old_map_id, &map_id, 
 	  &bytes );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, "ElmTran", bytes );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemTransition], bytes );
 }
 
 
@@ -424,7 +478,22 @@ cow_copy(FILE* file)
 	  &def_function,
 	  &o_addr, &bytes );
 
-  ReplaceSetMapTransition( def_function, o_addr, -1, -1, "CowCpy", bytes );
+  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_descriptions[CowCopy], bytes );
+}
+
+
+static void
+expand_array(FILE* file)
+{
+  int def_function;
+  int o_addr;
+  int bytes;
+  
+  fscanf( file, "%p %p %d",
+	  &def_function,
+	  &o_addr, &bytes );
+
+  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_descriptions[ExpandArray], bytes );
 }
 
 
@@ -440,7 +509,7 @@ elem_to_slow(FILE* file)
 	  &o_addr, 
 	  &old_map_id, &map_id );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, "ElemSlow" );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemToSlowMode] );
 }
 
 
@@ -456,7 +525,7 @@ prop_to_slow(FILE* file)
 	  &o_addr, 
 	  &old_map_id, &map_id);
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, "PropSlow");
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[PropertyToSlowMode]);
 }
 
 
@@ -472,7 +541,7 @@ elem_to_fast(FILE* file)
 	  &o_addr, 
 	  &old_map_id, &map_id );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, "ElemFast" );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemToFastMode] );
 }
 
 
@@ -488,38 +557,19 @@ prop_to_fast(FILE* file)
 	  &o_addr, 
 	  &old_map_id, &map_id);
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, "PropFast");
-}
-
-
-static void
-expand_array(FILE* file)
-{
-  int def_function;
-  int o_addr;
-  int bytes;
-  
-  fscanf( file, "%p %p %d",
-	  &def_function,
-	  &o_addr, &bytes );
-
-  ReplaceSetMapTransition( def_function, o_addr, -1, -1, "AryExp", bytes );
-}
-
-
-static void
-array_ops_copy(FILE* file)
-{
-  // To-do
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[PropertyToFastMode] );
 }
 
 
 static Transition*
-SimpleFunctionTransition( int f_addr, int code, const char* msg, int cost = 0 )
+SimpleFunctionTransition( int context, int f_addr, int code, const char* msg, int cost = 0 )
 {
   InstanceDescriptor* i_desc = find_instance(f_addr, StateMachine::MFunction, true, true);
   FunctionMachine* fsm = (FunctionMachine*)i_desc->sm;
-  return fsm->evolve(i_desc, -1, code, msg, cost);
+  Transition* trans = fsm->evolve(i_desc, -1, code, msg, cost);
+  
+  if ( context != -1 )
+    install_context(context, trans);
 }
 
 
@@ -529,7 +579,7 @@ gen_full_code(FILE* file)
   int f_addr, code;
   fscanf( file, "%p %p", 
 	  &f_addr, &code );
-  SimpleFunctionTransition( f_addr, code, "Full" );
+  SimpleFunctionTransition( -1, f_addr, code, events_descriptions[GenFullCode] );
 }
 
 
@@ -539,15 +589,15 @@ gen_opt_code(FILE* file)
   int f_addr, code;
   char opt_buf[256];
   
-  sprintf( opt_buf, "Opt: " );
+  sprintf( opt_buf, "%s: ", events_descriptions[GenOptCode] );
   fscanf( file, "%p %p %[^\t\n]", 
 	  &f_addr, &code, 
 	  opt_buf + strlen(opt_buf) );
   
-  Transition* trans = SimpleFunctionTransition( f_addr, code, opt_buf );
+  Transition* trans = SimpleFunctionTransition( -1, f_addr, code, opt_buf );
   State* s = trans->source;
   FunctionMachine* fm = (FunctionMachine*)s->machine;
-  fm->been_optimized = true;
+  fm->opt_count++;
 }
 
 
@@ -557,14 +607,14 @@ gen_osr_code(FILE* file)
   int f_addr, code;
   char opt_buf[256];
 
-  sprintf( opt_buf, "Osr: " );
+  sprintf( opt_buf, "%s: ", events_descriptions[GenOsrCode] );
   fscanf( file, "%p %p %[^\t\n]",
           &f_addr, &code, opt_buf + strlen(opt_buf) );
 
-  Transition* trans = SimpleFunctionTransition( f_addr, code, opt_buf );
+  Transition* trans = SimpleFunctionTransition( -1, f_addr, code, opt_buf );
   State* s = trans->source;
   FunctionMachine* fm = (FunctionMachine*)s->machine;
-  fm->been_optimized = true;
+  fm->opt_count++;
 }
 
 
@@ -610,12 +660,12 @@ reenable_opt(FILE* file)
 
 
 static void
-gen_opt_failed(FILE* file)
+opt_failed(FILE* file)
 {
   int f_addr, new_code;
   char opt_buf[256];
 
-  sprintf( opt_buf, "OptFailed: " );
+  sprintf( opt_buf, "%s: ", events_descriptions[OptFailed] );
   int last_pos = strlen(opt_buf);
   
   fscanf( file, "%p %p %[^\t\n]",
@@ -637,7 +687,7 @@ gen_opt_failed(FILE* file)
 
 
 static Transition*
-do_deopt_common(int f_addr, int old_code, int new_code, const char* msg)
+do_deopt_common(int context, int f_addr, int old_code, int new_code, const char* msg)
 {
   InstanceDescriptor* i_func = find_instance(f_addr, StateMachine::MFunction);
   if ( i_func == NULL ) return NULL;
@@ -652,43 +702,88 @@ do_deopt_common(int f_addr, int old_code, int new_code, const char* msg)
   }
   
   // Then, we transfer to the new_code
-  return fsm->evolve(i_func, -1, new_code, msg);
+  Transition* trans = fsm->evolve(i_func, -1, new_code, msg);
+  if ( context != -1 )
+    install_context( context, trans );
+
+  // Update other info
+  fsm->deopt_count++;
+  return trans;
 }
 
 
 static void
 regular_deopt(FILE* file)
 {
-  int f_addr, old_code, new_code;
+  int f_addr;
+  int context;
+  int old_code, new_code;
   int failed_obj, exp_map_id;
   char deopt_buf[256];
 
-  sprintf( deopt_buf, "Deopt: " );
-  fscanf( file, "%p %p %p %p %p %[^\t\n]",
+  sprintf( deopt_buf, "%s: ", events_descriptions[RegularDeopt] );
+  fscanf( file, "%p %p %p %p %p %p %[^\t\n]",
 	  &f_addr,
-	  &old_code,
-	  &new_code,
+	  &context,
+	  &old_code, &new_code,
 	  &failed_obj, &exp_map_id,
 	  deopt_buf + strlen(deopt_buf) );
 
   // We first model this transition
-  Transition* trans = do_deopt_common(f_addr, old_code, new_code, deopt_buf);
+  Transition* trans = do_deopt_common( context, f_addr, old_code, new_code, deopt_buf);
   if ( trans == NULL ) return;
+  
+  // Filter out useless optimizations
+  if ( strstr(deopt_buf, "eager" ) == NULL )
+    return;
 
-  // Infer
-  printf( "[%s] deoptimized, possibly because:\n", trans->source->machine->toString().c_str() );
+  FunctionMachine* fsm = (FunctionMachine*)trans->source->machine;
+  printf( "The reason for <%s> deoptimization of [%s] perhaps is:\n", 
+	  deopt_buf,
+	  fsm->toString().c_str() );
 
-  if ( exp_map_id != 0 ) {
+  // Infer the deoptimization reason
+  bool found_ans = false;
+  if ( failed_obj != 0 && exp_map_id != 0 ) {
     Map* exp_map = find_map(exp_map_id, false);
-    if ( exp_map == null_map ) return;
-    infer_deoptimization_reason(failed_obj, exp_map);
+    if ( exp_map != null_map )
+      found_ans = infer_deoptimization_reason(failed_obj, exp_map, fsm);
   }
-  else if ( failed_obj != 0 ) {
-    InstanceDescriptor* i_obj = find_instance(failed_obj, StateMachine::MObject);
-    printf( "\tPlease consider the recent actions on [%s]\n", i_obj->sm->toString().c_str() ); 
-  }
-  else {
-    printf( "\tSorry, I don't know, T__T\n" );
+
+  if ( found_ans == false ) {
+    if ( failed_obj != 0 ) {
+      InstanceDescriptor* i_obj = find_instance(failed_obj, StateMachine::MObject);
+      if ( i_obj != NULL ) {
+	vector<TransPacket*> &history = i_obj->history;
+	int size = history.size();
+	int start = (size > 5 ? size - 5 : 0 );
+	printf( "\tConsier the recent actions of object [%s]:\n", i_obj->sm->toString().c_str() );
+	printf( "\t\t" );
+	print_instance_path(history, start);
+	found_ans = true;
+      }
+    }
+    
+    if ( !found_ans ) {
+      if ( fsm->last_op != NULL ) {
+	// We look at the last operation happened in this function
+	TransPacket* tp = fsm->last_op;
+	StateMachine* context = tp->context;
+	Transition* trans = tp->trans;
+	State* src = trans->source;
+	State* tgt = trans->target;
+	
+	printf( "\tConsider the last operation for this deoptimized function:\n" );
+	printf( "\t\t{%s}--[%s, %s]--{%s}\n",
+		src->toString().c_str(),
+		context->m_name.c_str(),
+		tp->reason.c_str(),
+		tgt->toString().c_str() );
+      }
+      else {
+	printf( "\tSorry, I don't know, T__T\n" );
+      }
+    }
   }
   
   printf( "\n" );
@@ -699,14 +794,17 @@ static void
 deopt_as_inline(FILE* file)
 {
   int f_addr;
+  int context;
   int old_code, new_code;
   int real_deopt_func;
 
-  fscanf( file, "%p %p %p %p",
-	  &f_addr, &old_code, &new_code,
+  fscanf( file, "%p %p %p %p %p",
+	  &f_addr, 
+	  &context,
+	  &old_code, &new_code,
 	  &real_deopt_func );
-
-  Transition* trans = do_deopt_common(f_addr, old_code, new_code, "Deopt: inline");
+  
+  do_deopt_common( context, f_addr, old_code, new_code, events_descriptions[DeoptAsInline] );
 }
 
 
@@ -714,16 +812,19 @@ static void
 force_deopt(FILE* file)
 {
   int f_addr;
+  int context;
   int old_code, new_code;
 
-  fscanf( file, "%p %p %p",
-	  &f_addr, &old_code, &new_code );
+  fscanf( file, "%p %p %p %p",
+	  &f_addr, 
+	  &context,
+	  &old_code, &new_code );
 
-  Transition* trans = do_deopt_common(f_addr, old_code, new_code, "ForceDeopt");
+  Transition* trans = do_deopt_common( context, f_addr, old_code, new_code, events_descriptions[ForceDeopt] );
   if ( trans == NULL ) return;
   FunctionMachine* fsm = (FunctionMachine*)trans->source->machine;
 
-  record_deopt_function(fsm);
+  record_force_deopt_function(fsm);
 }
 
 
@@ -834,7 +935,21 @@ gc_move_code(FILE* file)
 static void
 notify_stack_deopt_all(FILE* file)
 {
+  sys_result_in_force_deopt("Stack Guard Tells Deoptimization");
+}
+
+
+static void
+set_checkpoint(FILE* file)
+{
+  int id;
+  char f_buf[256];
+  extern const char* visual_file;
   
+  // We output a graphviz file for all operations so far
+  sprintf( f_buf, "%s-%d", visual_file, checkpoint_id );
+  visualize_machines(f_buf);
+  checkpoint_id++;
 }
 
 
@@ -912,6 +1027,8 @@ visualize_machines(const char* file_name)
     return;
   }
   
+  //int tot_ic_miss = 0;
+
   // Do BFS to draw graphs
   for ( int i = StateMachine::MObject; i < StateMachine::MCount; ++i ) {
     map<int, StateMachine*> &t_mac = machines[i];
@@ -920,23 +1037,39 @@ visualize_machines(const char* file_name)
 	  it != t_mac.end();
 	  ++it ) {
       StateMachine* sm = it->second;
-      if ( sm->size() < states_count_limit ) continue;
+      // We only draw the delta operations
+      if ( sm->has_changed == false ) continue;
+      sm->has_changed = false;
+
       if ( !sm->has_name() ) continue;
-      if ( i == StateMachine::MFunction &&
-	   ((FunctionMachine*)sm)->been_optimized == false ) continue;
+      if ( sm->toString().find("New(G-Object)") != string::npos ) continue;
+      if ( sm->type == StateMachine::MFunction ) {
+	// Filter uninteresting functions
+	FunctionMachine* fsm = (FunctionMachine*)sm;
+	if ( fsm->deopt_count < 1 ) continue;
+	//tot_ic_miss += fsm->ic_miss_count;
+      }
+      else {
+	if ( sm->size() < states_count_limit ) continue;
+      }
 
       sm->draw_graphviz( file );
     }
   }
-    
+  
   fclose(file);
+
+  /*
+  if ( tot_ic_miss >= 5 )
+    printf( "Perhaps you should consider increasing IC slots for better performance.\n" );
+  */
 }
 
 
 static void
 sanity_check()
 {
-#define ASSERT_HANDLER(name, handler)		\
+#define ASSERT_HANDLER(name, handler, desc)		\
   assert(handlers[name] == handler);
 
   OBJECT_EVENTS_LIST(ASSERT_HANDLER)
@@ -963,7 +1096,7 @@ build_automata(const char* log_file)
     //sanity_check();
     //printf("after %d\n", i);
     //fflush(stdout);
-    ++i;
+    //++i;
   }
   
   register_map_notifier(NULL);

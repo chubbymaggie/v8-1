@@ -13873,8 +13873,6 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectManipulate) {
   CONVERT_ARG_CHECKED(JSObject, instance, 1);
   CONVERT_ARG_CHECKED(Map, old_map, 2);
 
-  if ( !FLAG_trace_internals ) return instance;
-
   LOG( isolate,
 	  	EmitObjectEvent(
 		(Logger::InternalEvent)event,
@@ -13883,6 +13881,19 @@ RUNTIME_FUNCTION(MaybeObject*, Runtime_LogObjectManipulate) {
   );
   
   return instance;
+}
+
+
+RUNTIME_FUNCTION(MaybeObject*, Runtime_LogSetCheckpoint) {
+  SealHandleScope shs(isolate);
+  DisallowHeapAllocation no_gc;
+  ASSERT(args.length() == 0);
+	//CONVERT_SMI_ARG_CHECKED(checkpoint_id, 0);
+
+  LOG( isolate,
+	  	EmitSysEvent(Logger::SetCheckpoint));
+  
+	return isolate->heap()->undefined_value();
 }
 
 
