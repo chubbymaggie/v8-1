@@ -1152,17 +1152,17 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
   environment()->Push(new_elements);
 
   // We log array growing action
-  if ( FLAG_trace_internals ) {
-	// Push the runtime call parameters
-	Add<HPushArgument>(Add<HConstant>(Logger::ElemTransition));
-	Add<HPushArgument>(object);
-	Add<HPushArgument>(graph()->GetConstantNull());
+  // if ( FLAG_trace_internals ) {
+  //   // Push the runtime call parameters
+  //   Add<HPushArgument>(Add<HConstant>(Logger::ElemTransition));
+  //   Add<HPushArgument>(object);
+  //   Add<HPushArgument>(graph()->GetConstantNull());
 
-    Add<HCallRuntime>(context,
-	  isolate()->factory()->empty_string(),
-      Runtime::FunctionForId(Runtime::kLogObjectManipulate),
-      3);
-  }
+  //   Add<HCallRuntime>(context,
+  // 		      isolate()->factory()->empty_string(),
+  // 		      Runtime::FunctionForId(Runtime::kLogObjectManipulate),
+  // 		      3);
+  // }
   capacity_checker.Else();
 
   environment()->Push(elements);
@@ -1210,12 +1210,12 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
   environment()->Push(new_elements);
 
   if ( FLAG_trace_internals ) {
-	Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
-	Add<HPushArgument>(object);
-	Add<HPushArgument>(graph()->GetConstantNull());
+  	Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
+  	Add<HPushArgument>(object);
+  	Add<HPushArgument>(graph()->GetConstantNull());
 
     Add<HCallRuntime>(environment()->LookupContext(),
-	  isolate()->factory()->empty_string(),
+  	  isolate()->factory()->empty_string(),
       Runtime::FunctionForId(Runtime::kLogObjectManipulate),
       3);
   }
@@ -5436,9 +5436,9 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
 	Add<HPushArgument>(Add<HConstant>(literal_index));
 
 	Add<HCallRuntime>(context,
-					  isolate()->factory()->empty_string(),
-					  Runtime::FunctionForId(Runtime::kLogObjectCreate),
-					  3);
+			  isolate()->factory()->empty_string(),
+			  Runtime::FunctionForId(Runtime::kLogObjectCreate),
+			  3);
   }
 
   expr->CalculateEmitStore(zone());
@@ -5598,15 +5598,15 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   Push(Add<HConstant>(expr->literal_index()));
 
   if ( FLAG_trace_internals ) {
-	// We log the array created at this literal
-	int literal_index = expr->literal_index();
-	Handle<JSFunction> closure = function_state()->compilation_info()->closure();
-
-	// Push the runtime call parameters
-	Add<HPushArgument>(literal);
-	Add<HPushArgument>(Add<HConstant>(closure));
+    // We log the array created at this literal
+    int literal_index = expr->literal_index();
+    Handle<JSFunction> closure = function_state()->compilation_info()->closure();
+    
+    // Push the runtime call parameters
+    Add<HPushArgument>(literal);
+    Add<HPushArgument>(Add<HConstant>(closure));
     Add<HPushArgument>(Add<HConstant>(literal_index));
-
+    
     Add<HCallRuntime>(context,
                       isolate()->factory()->empty_string(),
                       Runtime::FunctionForId(Runtime::kLogObjectCreate),

@@ -876,21 +876,21 @@ void Logger::EmitObjectEvent(InternalEvent event, JSObject* obj, ...)
 	break;
 
  // case ExpandArray:
-	//{
-	//  ElementsKind kind = cur_map->elements_kind();
-	//  int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
+ // 	{
+ // 	 ElementsKind kind = cur_map->elements_kind();
+ // 	 int base_size = IsFastDoubleElementsKind(kind) ? kDoubleSize : kPointerSize;
 
-	//  // Now we compute how many data are copied
-	//  va_start(arg_ptr, obj);
-	//  // Obtain the array capacity before growing
-	//  int old_capacity = va_arg(arg_ptr, int);
-	//  va_end(arg_ptr);
+ // 	 // Now we compute how many data are copied
+ // 	 va_start(arg_ptr, obj);
+ // 	 // Obtain the array capacity before growing
+ // 	 int old_capacity = va_arg(arg_ptr, int);
+ // 	 va_end(arg_ptr);
 
-	//  int cur_capacity = obj->elements()->length();
-	//  int bytes = base_size * (old_capacity+cur_capacity);
-	//  msg.Append( " %d", bytes );
-	//}
-	//break;
+ // 	 int cur_capacity = obj->elements()->length();
+ // 	 int bytes = base_size * cur_capacity;
+ // 	 msg.Append( " %d", bytes );
+ // 	}
+	break;
 
   default:
 	break;

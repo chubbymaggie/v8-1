@@ -9458,7 +9458,7 @@ void SharedFunctionInfo::TrimOptimizedCodeMap(int shrink_by) {
 bool JSFunction::CompileLazy(Handle<JSFunction> function,
                              ClearExceptionFlag flag) {
   bool result = true;
-  bool is_optimizing = true;
+  //bool is_optimizing = true;
 
   if (function->shared()->is_compiled()) {
     function->ReplaceCode(function->shared()->code());
@@ -9466,7 +9466,7 @@ bool JSFunction::CompileLazy(Handle<JSFunction> function,
     ASSERT(function->shared()->allows_lazy_compilation());
     CompilationInfoWithZone info(function);
     result = CompileLazyHelper(&info, flag);
-	is_optimizing = info.IsOptimizing();
+    //is_optimizing = info.IsOptimizing();
     ASSERT(!result || function->is_compiled());
   }
 
