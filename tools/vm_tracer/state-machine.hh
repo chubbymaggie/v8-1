@@ -52,6 +52,10 @@ public:
   int& operator*() { return map_id; }
   void update_map(int);
   void do_notify(Transition*);
+
+public:
+  static Map* notifier;
+  static Map* null_map;
 };
 
 
@@ -65,25 +69,10 @@ class Code : public CoreInfo
   int id() const { return code_id; }
   int& operator*() { return code_id; }
   void update_code(int);
+
+public:
+  static Code* null_code;
 };
-
-
-extern Map* null_map;
-extern Code* null_code;
-
-
-// Find or create a map structure from given map_id
-Map* 
-find_map(int new_map, bool create=true);
-
-// Find or create a code structure
-Code* 
-find_code(int new_code, bool create=true);
-
-
-//
-void 
-register_map_notifier(Map*);
 
 
 // Describe a transition
@@ -387,9 +376,6 @@ class ObjectMachine : public StateMachine
 
   // Models an event
   Transition* evolve(InstanceDescriptor*, int, int, ObjectMachine*, const char*, int = 0, bool = false );
-
- public:
-  static ObjectState temp_o;
 };
 
 
@@ -423,9 +409,6 @@ class FunctionMachine : public ObjectMachine
 
   // Evolve to the next state
   Transition* evolve(InstanceDescriptor*, int, int, const char*, int = 0, bool = false);
-
- public:
-  static FunctionState temp_f;
 };
 
 

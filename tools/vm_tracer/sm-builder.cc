@@ -3,9 +3,10 @@
 
 #include <cstring>
 #include <cassert>
-#include "events.h"
 #include "sm-builder.hh"
+#include "type-info.hh"
 #include "miner.hh"
+#include "jsweeter_events.h"
 
 using namespace std;
 
@@ -59,7 +60,7 @@ EventHandler handlers[] = {
 
 
 // Fill in the dscriptions
-const char* events_descriptions[] = {
+const char* events_text[] = {
 #define GetDescription(name, handler, desc) desc,
 
   OBJECT_EVENTS_LIST(GetDescription)
@@ -162,7 +163,7 @@ create_boilerplate_common(FILE* file, const char* msg)
   int map_id;
   int index;
 
-  fscanf( file, "%p %p %p %d",
+  fscanf( file, "%x %x %x %d",
 	  &def_function,
 	  &o_addr, &map_id, &index );
 
@@ -196,14 +197,14 @@ create_boilerplate_common(FILE* file, const char* msg)
 static void 
 create_obj_boilerplate(FILE* file)
 {
-  create_boilerplate_common(file, events_descriptions[CreateObjBoilerplate]);
+  create_boilerplate_common(file, events_text[CreateObjBoilerplate]);
 }
 
 
 static void 
 create_array_boilerplate(FILE* file)
 {
-  create_boilerplate_common(file, events_descriptions[CreateArrayBoilerplate]);
+  create_boilerplate_common(file, events_text[CreateArrayBoilerplate]);
 }
 
 
@@ -216,12 +217,12 @@ create_obj_common(FILE* file, StateMachine::Mtype type, const char* msg)
   int map_id, code;
   char name_buf[256];
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function, &o_addr, 
 	  &alloc_sig, &map_id);
   
   if ( type == StateMachine::MFunction )
-    fscanf( file, "%p", &code );
+    fscanf( file, "%x", &code );
   
   fscanf( file, " %[^\t\n]", name_buf );
   
@@ -277,35 +278,35 @@ create_obj_common(FILE* file, StateMachine::Mtype type, const char* msg)
 static void 
 create_object_literal(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateObjectLiteral]);
+  create_obj_common(file, StateMachine::MObject, events_text[CreateObjectLiteral]);
 }
 
 
 static void 
 create_array_literal(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateArrayLiteral]);
+  create_obj_common(file, StateMachine::MObject, events_text[CreateArrayLiteral]);
 }
 
 
 static void 
 create_new_object(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateNewObject]);
+  create_obj_common(file, StateMachine::MObject, events_text[CreateNewObject]);
 }
 
 
 static void 
 create_new_array(FILE* file)
 {
-  create_obj_common(file, StateMachine::MObject, events_descriptions[CreateNewArray]);
+  create_obj_common(file, StateMachine::MObject, events_text[CreateNewArray]);
 }
 
 
 static void
 create_function(FILE* file)
 {
-  create_obj_common(file, StateMachine::MFunction, events_descriptions[CreateFunction]);
+  create_obj_common(file, StateMachine::MFunction, events_text[CreateFunction]);
 }
 
 
@@ -316,7 +317,7 @@ copy_object(FILE* file)
   int dst, src;
 
   fscanf( file, 
-	  "%p %p %p", 
+	  "%x %x %x", 
 	  &def_function, &dst, &src);
 
   InstanceDescriptor* src_desc = find_instance(src, StateMachine::MObject);
@@ -340,12 +341,12 @@ change_func_prototype(FILE* file)
   int proto;
   char msg[128];
   
-  fscanf( file, "%p %p %p",
+  fscanf( file, "%x %x %x",
 	  &def_function,
 	  &o_addr, &proto );
   /*
-  sprintf(msg, "%s: %p",
-	  events_descriptions[ChangeFuncPrototype], proto);
+  sprintf(msg, "%s: %x",
+	  events_text[ChangeFuncPrototype], proto);
   ReplaceSetMapTransition( def_function, o_addr, -1, map_id, msg );
   */
 }
@@ -360,14 +361,14 @@ change_obj_prototype(FILE* file)
   int proto;
   char msg[128];
 
-  fscanf( file, "%p %p %p %p %p",
+  fscanf( file, "%x %x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &new_map_id, 
 	  &proto );
   
-  sprintf(msg, "%s: %p",
-	  events_descriptions[ChangeObjPrototype], proto);
+  sprintf(msg, "%s: %x",
+	  events_text[ChangeObjPrototype], proto);
   ReplaceSetMapTransition( def_function, o_addr, old_map_id, new_map_id, msg );
 }
 
@@ -379,7 +380,7 @@ set_map(FILE* file)
   int o_addr;
   int map_id;
 
-  fscanf( file, "%p %p %p",
+  fscanf( file, "%x %x %x",
 	  &def_function,
 	  &o_addr, &map_id );
   
@@ -396,12 +397,12 @@ migrate_to_map(FILE* file)
   int o_addr;
   int old_map_id, map_id;
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id );
   
-  SimpleObjectTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[MigrateToMap] );
+  SimpleObjectTransition( def_function, o_addr, old_map_id, map_id, events_text[MigrateToMap] );
 }
 
 
@@ -412,7 +413,7 @@ field_update_common(FILE* file, char* msg)
   int o_addr;
   int old_map_id, map_id;
 
-  fscanf( file, "%p %p %p %p %[^\t\n]",
+  fscanf( file, "%x %x %x %x %[^\t\n]",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id, 
@@ -426,7 +427,7 @@ static void
 new_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "%s: ", events_descriptions[NewField]);
+  sprintf( msg, "%s: ", events_text[NewField]);
   field_update_common(file, msg);
 }
 
@@ -435,7 +436,7 @@ static void
 del_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "%s: ", events_descriptions[DelField]);
+  sprintf( msg, "%s: ", events_text[DelField]);
   field_update_common(file, msg);
 }
 
@@ -444,7 +445,7 @@ static void
 update_field(FILE* file)
 {
   char msg[256];
-  sprintf( msg, "%s: ", events_descriptions[UpdateField]);
+  sprintf( msg, "%s: ", events_text[UpdateField]);
   field_update_common(file, msg);
 }
 
@@ -457,13 +458,13 @@ elem_transition(FILE* file)
   int old_map_id, map_id;
   int bytes;
 
-  fscanf( file, "%p %p %p %p %d",
+  fscanf( file, "%x %x %x %x %d",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id, 
 	  &bytes );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemTransition], bytes );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_text[ElemTransition], bytes );
 }
 
 
@@ -474,11 +475,11 @@ cow_copy(FILE* file)
   int o_addr;
   int bytes;
   
-  fscanf( file, "%p %p %d",
+  fscanf( file, "%x %x %d",
 	  &def_function,
 	  &o_addr, &bytes );
 
-  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_descriptions[CowCopy], bytes );
+  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_text[CowCopy], bytes );
 }
 
 
@@ -489,11 +490,11 @@ expand_array(FILE* file)
   int o_addr;
   int bytes;
   
-  fscanf( file, "%p %p %d",
+  fscanf( file, "%x %x %d",
 	  &def_function,
 	  &o_addr, &bytes );
 
-  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_descriptions[ExpandArray], bytes );
+  ReplaceSetMapTransition( def_function, o_addr, -1, -1, events_text[ExpandArray], bytes );
 }
 
 
@@ -504,12 +505,12 @@ elem_to_slow(FILE* file)
   int o_addr;
   int old_map_id, map_id;
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemToSlowMode] );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_text[ElemToSlowMode] );
 }
 
 
@@ -520,12 +521,12 @@ prop_to_slow(FILE* file)
   int o_addr;
   int old_map_id, map_id;
     
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id);
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[PropertyToSlowMode]);
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_text[PropertyToSlowMode]);
 }
 
 
@@ -536,12 +537,12 @@ elem_to_fast(FILE* file)
   int o_addr;
   int old_map_id, map_id;
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id );
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[ElemToFastMode] );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_text[ElemToFastMode] );
 }
 
 
@@ -552,12 +553,12 @@ prop_to_fast(FILE* file)
   int o_addr;
   int old_map_id, map_id;
     
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &def_function,
 	  &o_addr, 
 	  &old_map_id, &map_id);
 
-  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_descriptions[PropertyToFastMode] );
+  ReplaceSetMapTransition( def_function, o_addr, old_map_id, map_id, events_text[PropertyToFastMode] );
 }
 
 
@@ -577,9 +578,9 @@ static void
 gen_full_code(FILE* file)
 {
   int f_addr, code;
-  fscanf( file, "%p %p", 
+  fscanf( file, "%x %x", 
 	  &f_addr, &code );
-  SimpleFunctionTransition( -1, f_addr, code, events_descriptions[GenFullCode] );
+  SimpleFunctionTransition( -1, f_addr, code, events_text[GenFullCode] );
 }
 
 
@@ -589,8 +590,8 @@ gen_opt_code(FILE* file)
   int f_addr, code;
   char opt_buf[256];
   
-  sprintf( opt_buf, "%s: ", events_descriptions[GenOptCode] );
-  fscanf( file, "%p %p %[^\t\n]", 
+  sprintf( opt_buf, "%s: ", events_text[GenOptCode] );
+  fscanf( file, "%x %x %[^\t\n]", 
 	  &f_addr, &code, 
 	  opt_buf + strlen(opt_buf) );
   
@@ -607,8 +608,8 @@ gen_osr_code(FILE* file)
   int f_addr, code;
   char opt_buf[256];
 
-  sprintf( opt_buf, "%s: ", events_descriptions[GenOsrCode] );
-  fscanf( file, "%p %p %[^\t\n]",
+  sprintf( opt_buf, "%s: ", events_text[GenOsrCode] );
+  fscanf( file, "%x %x %[^\t\n]",
           &f_addr, &code, opt_buf + strlen(opt_buf) );
 
   Transition* trans = SimpleFunctionTransition( -1, f_addr, code, opt_buf );
@@ -623,7 +624,7 @@ set_code(FILE* file)
 {
   int f_addr, code;
 
-  fscanf( file, "%p %p", &f_addr, &code );
+  fscanf( file, "%x %x", &f_addr, &code );
 }
 
 
@@ -633,7 +634,7 @@ disable_opt(FILE* file)
   int shared, f_addr;
   char opt_buf[256];
 
-  fscanf( file, "%p %p %[^\t\n]",
+  fscanf( file, "%x %x %[^\t\n]",
           &f_addr, &shared, opt_buf );
 
   StateMachine* sm = find_signature(shared, StateMachine::MFunction);
@@ -649,7 +650,7 @@ reenable_opt(FILE* file)
   int shared, f_addr;
   char opt_buf[256];
 
-  fscanf( file, "%p %p %[^\t\n]",
+  fscanf( file, "%x %x %[^\t\n]",
           &f_addr, &shared, opt_buf );
 
   StateMachine* sm = find_signature(shared, StateMachine::MFunction);
@@ -665,10 +666,10 @@ opt_failed(FILE* file)
   int f_addr, new_code;
   char opt_buf[256];
 
-  sprintf( opt_buf, "%s: ", events_descriptions[OptFailed] );
+  sprintf( opt_buf, "%s: ", events_text[OptFailed] );
   int last_pos = strlen(opt_buf);
   
-  fscanf( file, "%p %p %[^\t\n]",
+  fscanf( file, "%x %x %[^\t\n]",
           &f_addr, 
 	  &new_code, opt_buf + last_pos );
 
@@ -721,8 +722,8 @@ regular_deopt(FILE* file)
   int failed_obj, exp_map_id;
   char deopt_buf[256];
 
-  sprintf( deopt_buf, "%s: ", events_descriptions[RegularDeopt] );
-  fscanf( file, "%p %p %p %p %p %p %[^\t\n]",
+  sprintf( deopt_buf, "%s: ", events_text[RegularDeopt] );
+  fscanf( file, "%x %x %x %x %x %x %[^\t\n]",
 	  &f_addr,
 	  &context,
 	  &old_code, &new_code,
@@ -746,7 +747,7 @@ regular_deopt(FILE* file)
   bool found_ans = false;
   if ( failed_obj != 0 && exp_map_id != 0 ) {
     Map* exp_map = find_map(exp_map_id, false);
-    if ( exp_map != null_map )
+    if ( exp_map != Map::null_map )
       found_ans = infer_deoptimization_reason(failed_obj, exp_map, fsm);
   }
 
@@ -798,13 +799,13 @@ deopt_as_inline(FILE* file)
   int old_code, new_code;
   int real_deopt_func;
 
-  fscanf( file, "%p %p %p %p %p",
+  fscanf( file, "%x %x %x %x %x",
 	  &f_addr, 
 	  &context,
 	  &old_code, &new_code,
 	  &real_deopt_func );
   
-  do_deopt_common( context, f_addr, old_code, new_code, events_descriptions[DeoptAsInline] );
+  do_deopt_common( context, f_addr, old_code, new_code, events_text[DeoptAsInline] );
 }
 
 
@@ -815,12 +816,12 @@ force_deopt(FILE* file)
   int context;
   int old_code, new_code;
 
-  fscanf( file, "%p %p %p %p",
+  fscanf( file, "%x %x %x %x",
 	  &f_addr, 
 	  &context,
 	  &old_code, &new_code );
 
-  Transition* trans = do_deopt_common( context, f_addr, old_code, new_code, events_descriptions[ForceDeopt] );
+  Transition* trans = do_deopt_common( context, f_addr, old_code, new_code, events_text[ForceDeopt] );
   if ( trans == NULL ) return;
   FunctionMachine* fsm = (FunctionMachine*)trans->source->machine;
 
@@ -828,11 +829,22 @@ force_deopt(FILE* file)
 }
 
 
+static void 
+register_map_notifier(Map* r)
+{
+  if ( Map::notifier != NULL )
+    // Perhaps we miss recording some operations
+    ops_result_in_force_deopt(NULL);
+
+  Map::notifier = r;
+}
+
+
 static void
 begin_deopt_on_map(FILE* file)
 {
   int map_id;
-  fscanf( file, "%p", &map_id );
+  fscanf( file, "%x", &map_id );
 
   // Map change can result in code deoptimization
   Map* map_d = find_map(map_id);
@@ -844,7 +856,7 @@ static void
 gc_move_object(FILE* file)
 {
   int from, to;
-  fscanf( file, "%p %p", &from, &to );
+  fscanf( file, "%x %x", &from, &to );
   return;
   // Update the specific instance
   for ( int i = StateMachine::MBoilerplate; i <= StateMachine::MFunction; ++i ) {
@@ -878,10 +890,10 @@ static void
 gc_move_map(FILE* file)
 {
   int old_id, new_id;
-  fscanf( file, "%p %p", &old_id, &new_id );
+  fscanf( file, "%x %x", &old_id, &new_id );
 
   Map* map_d = find_map(old_id);
-  if ( map_d == null_map ) return;
+  if ( map_d == Map::null_map ) return;
   map_d->update_map(new_id);
 }
 
@@ -890,7 +902,7 @@ static void
 gc_move_shared(FILE* file)
 {
   int from, to;
-  fscanf( file, "%p %p", &from, &to );
+  fscanf( file, "%x %x", &from, &to );
 
   // Update functioin machine
   StateMachine::Mtype type = StateMachine::MFunction;
@@ -914,11 +926,11 @@ static void
 gc_move_code(FILE* file)
 {
   int old_code, new_code;
-  fscanf( file, "%p %p", 
+  fscanf( file, "%x %x", 
 	  &old_code, &new_code );
 
   Code* code_d = find_code(old_code);
-  if ( code_d == null_code ) return;
+  if ( code_d == Code::null_code ) return;
 
   code_d->update_code(new_code);
   // We make a transition to all the instances owning this code
@@ -935,7 +947,7 @@ gc_move_code(FILE* file)
 static void
 notify_stack_deopt_all(FILE* file)
 {
-  sys_result_in_force_deopt("Stack Guard Tells Deoptimization");
+  sys_result_in_force_deopt("Stack guard tells deoptimization");
 }
 
 
@@ -1091,12 +1103,13 @@ build_automata(const char* log_file)
   prepare_machines();
   int i = 0;
   while ( fscanf(file, "%d", &event_type) == 1 ) {
-    //printf("before %d, ", i);
+    printf("Before %d: %d, ", i, event_type);
+    //printf( "%d\n", event_type );
     handlers[event_type](file);
     //sanity_check();
-    //printf("after %d\n", i);
-    //fflush(stdout);
-    //++i;
+    printf("after %d\n", i);
+    fflush(stdout);
+    ++i;
   }
   
   register_map_notifier(NULL);

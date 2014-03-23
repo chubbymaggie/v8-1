@@ -4,7 +4,7 @@
 #ifndef SM_BASICS_H
 #define SM_BASICS_H
 
-#include "state_machine.h"
+#include "state-machine.hh"
 
 
 // initialize data structures

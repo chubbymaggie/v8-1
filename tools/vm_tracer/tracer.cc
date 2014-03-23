@@ -35,7 +35,7 @@ parse_options(int argc, char** argv)
       break;
       
     case 's':
-      sscanf( optarg, "%p", slice_sig );
+      sscanf( optarg, "%x", slice_sig );
       break;
 
     case 'h':

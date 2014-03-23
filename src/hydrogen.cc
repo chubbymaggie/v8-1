@@ -5602,15 +5602,15 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   Push(Add<HConstant>(expr->literal_index()));
 
   if ( FLAG_trace_internals ) {
-	// We log the array created at this literal
-	int literal_index = expr->literal_index();
-	Handle<JSFunction> closure = function_state()->compilation_info()->closure();
-
-	// Push the runtime call parameters
-	Add<HPushArgument>(literal);
-	Add<HPushArgument>(Add<HConstant>(closure));
+    // We log the array created at this literal
+    int literal_index = expr->literal_index();
+    Handle<JSFunction> closure = function_state()->compilation_info()->closure();
+    
+    // Push the runtime call parameters
+    Add<HPushArgument>(literal);
+    Add<HPushArgument>(Add<HConstant>(closure));
     Add<HPushArgument>(Add<HConstant>(literal_index));
-
+    
     Add<HCallRuntime>(context,
                       isolate()->factory()->empty_string(),
                       Runtime::FunctionForId(Runtime::kLogObjectCreate),

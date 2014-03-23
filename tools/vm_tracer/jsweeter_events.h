@@ -5,22 +5,22 @@
 
 
 #define OBJECT_EVENTS_LIST(V)						\
-  V(CreateObjBoilerplate,   create_obj_boilerplate,  "NewObj")		\
-  V(CreateArrayBoilerplate, create_array_boilerplate,  "NewArray")	\
-  V(CreateObjectLiteral,    create_object_literal, "NewObjLit")		\
-  V(CreateArrayLiteral,     create_array_literal,  "NewArrayLit")	\
-  V(CreateNewObject,        create_new_object, "NewObj")		\
-  V(CreateNewArray,         create_new_array, "NewArray")		\
-  V(CreateFunction,       create_function, "NewFunc")			\
-  V(CopyObject,           copy_object, "CopyObj")			\
-  V(ChangeFuncPrototype,      change_func_prototype, "ChgFuncProto")	\
-  V(ChangeObjPrototype,      change_obj_prototype, "ChgObjProto")	\
-  V(SetMap,               set_map,  "SetMap")				\
-  V(MigrateToMap,         migrate_to_map, "MigrateMap")			\
-  V(NewField,             new_field,  "NewField")			\
-  V(DelField,             del_field,  "DelField")			\
-  V(UpdateField,          update_field,  "UpdateField")			\
-  V(ElemTransition,       elem_transition,  "ElmTran")			\
+  V(CreateObjBoilerplate,   create_obj_boilerplate,  "+ObjBp")		\
+  V(CreateArrayBoilerplate, create_array_boilerplate,  "+AryBp")	\
+  V(CreateObjectLiteral,    create_object_literal, "+ObjLit")		\
+  V(CreateArrayLiteral,     create_array_literal,  "+AryLit")	\
+  V(CreateNewObject,        create_new_object, "+Obj")		\
+  V(CreateNewArray,         create_new_array, "+Array")		\
+  V(CreateFunction,       create_function, "+Func")			\
+  V(CopyObject,           copy_object, "CpyObj")			\
+  V(ChangeFuncPrototype,      change_func_prototype, "!FProto")	\
+  V(ChangeObjPrototype,      change_obj_prototype, "!OProto")	\
+  V(SetMap,               set_map,  "!Map")				\
+  V(MigrateToMap,         migrate_to_map, "Map->*")			\
+  V(NewField,             new_field,  "+Field")			\
+  V(DelField,             del_field,  "+Field")			\
+  V(UpdateField,          update_field,  "!Field")			\
+  V(ElemTransition,       elem_transition,  "ElmTy->*")			\
   V(CowCopy,              cow_copy,  "CowCpy")				\
   V(ExpandArray,          expand_array,  "AryExp")			\
   V(ElemToSlowMode,       elem_to_slow,  "ElemSlow")			\
@@ -52,6 +52,6 @@
   V(GCMoveShared,         gc_move_shared, "GCMoveShared")		\
   V(GCMoveMap,            gc_move_map,  "GCMoveMap")			\
   V(NotifyStackDeoptAll, notify_stack_deopt_all,  "StackDeoptAll")	\
-  V(SetCheckpoint,        set_checkpoint, "SetCheckpoint")
+  V(SetCheckpoint,        set_checkpoint, "SetCheckpoint")  
 
 #endif

@@ -5,7 +5,7 @@
 #define MINER_H
 
 #include <deque>
-#include "state_machine.h"
+#include "state-machine.hh"
 
 using std::deque;
 

@@ -530,13 +530,13 @@ class LEnvironment: public ZoneObject {
         translation_size_(value_count),
         parameter_count_(parameter_count),
         pc_offset_(-1),
+        check_prototype_map(false),
         values_(value_count, zone),
         is_tagged_(value_count, zone),
         is_uint32_(value_count, zone),
         outer_(outer),
         entry_(entry),
-        zone_(zone),
-	      check_prototype_map(false) { }
+        zone_(zone) { }
 
   Handle<JSFunction> closure() const { return closure_; }
   FrameType frame_type() const { return frame_type_; }
@@ -604,7 +604,7 @@ class LEnvironment: public ZoneObject {
   int translation_size_;
   int parameter_count_;
   int pc_offset_;
-	bool check_prototype_map;
+  bool check_prototype_map;
 
   // Value array: [parameters] [locals] [expression stack] [de-materialized].
   //              |>--------- translation_size ---------<|

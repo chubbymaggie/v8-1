@@ -2,114 +2,15 @@
 // by richardxx, 2013
 
 #include <queue>
-#include "state_machine.h"
+#include "state-machine.hh"
+#include "type-info.hh"
 #include "miner.hh"
 
 using namespace std;
 
-
-// Global data
-ObjectState ObjectMachine::temp_o;
-FunctionState FunctionMachine::temp_f;
-
-static map<int, Map*> all_maps;
-static map<int, Code*> all_codes;
-
-Map* null_map = new Map(-1);
-Code* null_code = new Code(-1);
-
-static Map* map_notifier = NULL;
-
-
-void CoreInfo::add_usage(State* user_s)
-{
-  used_by.push_back(user_s);
-}
-
-
-Map::Map(int new_map)
-{
-  map_id = new_map;
-}
-
-
-void Map::update_map(int new_id)
-{
-  // Update global map structure
-  all_maps.erase(map_id);
-  all_maps[new_id] = this;
-
-  // Now we change the map id to new id
-  map_id = new_id;
-}
-
-
-void Map::do_notify(Transition* trans)
-{
-  if (map_notifier == this )
-    ops_result_in_force_deopt(trans);
-}
-
-
-Map* find_map(int new_map, bool create)
-{
-  map<int, Map*>::iterator it = all_maps.find(new_map);
-  Map* res = null_map;
-
-  if ( it == all_maps.end() ) {
-    if ( create == true ) {
-      res = new Map(new_map);
-      all_maps[new_map] = res;
-    }
-  }
-  else
-    res = it->second;
-  
-  return res;
-}
-
-
-void 
-register_map_notifier(Map* r)
-{
-  if ( map_notifier != NULL )
-    // Perhaps we miss recording some operations
-    ops_result_in_force_deopt(NULL);
-
-  map_notifier = r;
-}
-
-
-Code::Code(int new_code)
-{
-  code_id = new_code;
-}
-
-
-void Code::update_code(int new_code_id)
-{
-  all_codes.erase(code_id);
-  code_id = new_code_id;
-  all_codes[new_code_id] = this;
-}
-
-
-Code* find_code(int new_code, bool create)
-{
-  map<int, Code*>::iterator it = all_codes.find(new_code);
-  Code* res = null_code;
-  
-  if ( it == all_codes.end() ) {
-    if ( create == true ) {
-      res = new Code(new_code);
-      all_codes[new_code] = res;
-    }
-  }
-  else
-    res = it->second;
-  
-  return res;
-}
+// Placeholder objects
+static ObjectState temp_o;
+static FunctionState temp_f;
 
 
 TransPacket::TransPacket()
@@ -240,25 +141,27 @@ void Transition::merge_reasons(string& final)
   int i = 0;
   int cost = 0;
   stringstream ss;
-  
+
   TpSet::iterator it = triggers.begin();
   TpSet::iterator end = triggers.end();
 
   for ( ; it != end; ++it ) {
-    if ( i > 6 ) break;
-    if ( i > 0 ) ss << '+';
+    //if ( i > 6 ) break;
+    if ( i > 0 ) {
+      ss << "+\\n";
+    }
     TransPacket* tp = *it;
     tp->describe(ss);
     cost += tp->cost;
     ++i;
   }
   
-  if ( it != end )
-    ss << "+(More...)";
+  //if ( it != end )                                                                                                                                                          
+  //ss << "+\\n(More...)";
 
   if ( cost != 0 )
     ss << "$$" << cost;
-    
+
   final = ss.str();
 }
 
@@ -376,7 +279,7 @@ ObjectState::ObjectState()
 { 
   id = 0;
   machine = NULL;
-  map_d = null_map; 
+  map_d = Map::null_map; 
 }
 
 
@@ -384,7 +287,7 @@ ObjectState::ObjectState( int my_id )
 {
   id = my_id;
   machine = NULL;
-  map_d = null_map;
+  map_d = Map::null_map;
 }
 
 
@@ -433,7 +336,7 @@ FunctionState::FunctionState()
 { 
   id = 0;
   machine = NULL;
-  code_d = null_code;
+  code_d = Code::null_code;
 }
 
 
@@ -441,7 +344,7 @@ FunctionState::FunctionState( int my_id )
 {
   id = my_id;
   machine = NULL;
-  code_d = null_code;
+  code_d = Code::null_code;
 }
   
 
