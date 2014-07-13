@@ -2348,6 +2348,8 @@ MaybeObject* JSObject::MigrateToMap(Map* new_map) {
   if (!old_map->InstancesNeedRewriting(
           new_map, number_of_fields, inobject, unused)) {
     set_map(new_map);
+		LOG_INTERNAL_EVENT( GetIsolate(),
+			EmitObjectEvent(Logger::SetMap, this, old_map));
     return this;
   }
 
@@ -2414,6 +2416,9 @@ MaybeObject* JSObject::MigrateToMap(Map* new_map) {
   }
 
   set_map(new_map);
+  
+  LOG_INTERNAL_EVENT( GetIsolate(),
+		      EmitObjectEvent(Logger::SetMap, this, old_map));
 
   return this;
 }
@@ -3905,6 +3910,7 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* lookup,
               MaybeObject* maybe_failure =
                   lookup->holder()->MigrateToMap(Map::cast(back));
               if (maybe_failure->IsFailure()) return maybe_failure;
+							old_map = map();
             }
             DescriptorArray* desc = transition_map->instance_descriptors();
             int descriptor = transition_map->LastAdded();
@@ -3945,6 +3951,18 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* lookup,
 
   Handle<Object> hresult;
   if (!result->ToHandle(&hresult, isolate)) return result;
+  
+  // Log field addition/update
+  if ( lookup->type() == TRANSITION ) {
+    LOG_INTERNAL_EVENT(isolate, 
+		       EmitObjectEvent(Logger::NewField, *self, *name, old_map));
+  }
+  else {
+    if ( self->map() != old_map ) {
+      LOG_INTERNAL_EVENT(isolate, 
+			 EmitObjectEvent(Logger::WriteFieldTransition, *self, *name, old_map));
+    }
+  }
 
   if (FLAG_harmony_observation && map()->is_observed()) {
     if (lookup->IsTransition()) {
@@ -3959,16 +3977,6 @@ MaybeObject* JSObject::SetPropertyForResult(LookupResult* lookup,
         }
       }
     }
-  }
-
-  if ( FLAG_trace_internals ) {
-	if (map() != old_map) {
-	  LOG( isolate,
-		EmitObjectEvent(
-		Logger::WriteFieldTransition,
-		*self, *name, old_map)
-		);
-	}
   }
 
   return *hresult;
@@ -4122,6 +4130,7 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
             if (back->IsMap()) {
               MaybeObject* maybe_failure = self->MigrateToMap(Map::cast(back));
               if (maybe_failure->IsFailure()) return maybe_failure;
+							old_map = map();			// update old map
             }
             DescriptorArray* desc = transition_map->instance_descriptors();
             int descriptor = transition_map->LastAdded();
@@ -4144,7 +4153,7 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
             lookup.GetTransitionIndex(), *name, *value, attributes);
       }
       break;
-    }
+		}
     case HANDLER:
     case NONEXISTENT:
       UNREACHABLE();
@@ -4152,6 +4161,18 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
 
   Handle<Object> hresult;
   if (!result->ToHandle(&hresult, isolate)) return result;
+
+  // Log field addition/update
+  if ( lookup.type() == TRANSITION ) {
+		LOG_INTERNAL_EVENT(isolate, 
+				   EmitObjectEvent(Logger::NewField, *self, *name, old_map));
+  }
+  else {
+    if ( self->map() != old_map ) {
+      LOG_INTERNAL_EVENT(isolate, 
+			 EmitObjectEvent(Logger::WriteFieldTransition, *self, *name, old_map));
+    }
+  }
 
   if (is_observed) {
     if (lookup.IsTransition()) {
@@ -4173,16 +4194,6 @@ MaybeObject* JSObject::SetLocalPropertyIgnoreAttributes(
         EnqueueChangeRecord(self, "updated", name, old_value);
       }
     }
-  }
-
-  if ( FLAG_trace_internals ) {
-	if (map() != old_map) {
-	  LOG( isolate,
-		EmitObjectEvent(
-		Logger::WriteFieldTransition,
-		*self, *name, old_map)
-		);
-	}
   }
 
   return *hresult;
@@ -9621,19 +9632,18 @@ MaybeObject* JSFunction::SetInstancePrototype(Object* value) {
     // prototype is put into the initial map where it belongs.
     set_prototype_or_initial_map(value);
   }
-  heap->ClearInstanceofCache();
 
-  if ( FLAG_trace_internals 
-	&& value->IsJSObject() ) {
-	  // We only log the regular way of prototype change
-	Isolate* isolate = GetIsolate();
-	LOG(isolate,
-	  EmitObjectEvent(
-	  Logger::ChangePrototype,
-	  this)
-	  );
+  if ( FLAG_trace_internals && value->IsJSObject() ) {
+    // We only log the regular way of prototype change
+    Isolate* isolate = GetIsolate();
+    LOG(isolate,
+	EmitObjectEvent(
+			Logger::ChangePrototype,
+			this, JSObject::cast(value))
+	);
   }
 
+	heap->ClearInstanceofCache();
   return value;
 }
 
@@ -10946,8 +10956,10 @@ MaybeObject* JSObject::SetFastElementsCapacityAndLength(
                             GetElementsKind(), new_elements);
   }
 
-  LOG_INTERNAL_EVENT(GetIsolate(), 
-	EmitObjectEvent(Logger::ElemTransition, this, old_map));
+	if ( old_map != map() ) {
+		LOG_INTERNAL_EVENT(GetIsolate(), 
+			EmitObjectEvent(Logger::ElemTransition, this, old_map));
+	}
 
   if (IsJSArray()) {
     JSArray::cast(this)->set_length(Smi::FromInt(length));
@@ -10978,13 +10990,13 @@ MaybeObject* JSObject::SetFastDoubleElementsCapacityAndLength(
     new_elements_kind = FAST_DOUBLE_ELEMENTS;
   }
 
+	Map* old_map = map();
   Map* new_map;
   { MaybeObject* maybe_obj =
         GetElementsTransitionMap(heap->isolate(), new_elements_kind);
     if (!maybe_obj->To(&new_map)) return maybe_obj;
   }
 
-  Map* old_map = map();
   FixedArrayBase* old_elements = elements();
   ElementsAccessor* accessor = ElementsAccessor::ForKind(FAST_DOUBLE_ELEMENTS);
   { MaybeObject* maybe_obj =
@@ -11004,8 +11016,10 @@ MaybeObject* JSObject::SetFastDoubleElementsCapacityAndLength(
                             GetElementsKind(), elems);
   }
 
-  LOG_INTERNAL_EVENT(GetIsolate(), 
-	EmitObjectEvent(Logger::ElemTransition, this, old_map));
+	if ( old_map != new_map ) {
+		LOG_INTERNAL_EVENT(GetIsolate(), 
+			EmitObjectEvent(Logger::ElemTransition, this, old_map));
+	}
 
   if (IsJSArray()) {
     JSArray::cast(this)->set_length(Smi::FromInt(length));
@@ -11534,13 +11548,13 @@ Handle<Object> JSObject::SetPrototype(Handle<JSObject> object,
 
   heap->ClearInstanceofCache();
   ASSERT(size == object->Size());
-
-  if ( FLAG_trace_internals ) {
-	LOG(isolate,
-	  EmitObjectEvent(
-	  Logger::ChangePrototype,
-	  *real_receiver)
-	 );
+  
+  if ( FLAG_trace_internals && value->IsJSObject()) {
+    LOG(isolate,
+	EmitObjectEvent(
+			Logger::ChangePrototype,
+			*real_receiver, *map, *value)
+	);
   }
 
   return value;
@@ -12543,8 +12557,8 @@ MaybeObject* JSObject::TransitionElementsKind(ElementsKind to_kind) {
       FixedArrayBase* elms = FixedArrayBase::cast(elements());
       PrintElementsTransition(stdout, from_kind, elms, to_kind, elms);
     }
-	LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::ElemTransition, this, old_map));
-	return this;
+		LOG_INTERNAL_EVENT(isolate, EmitObjectEvent(Logger::ElemTransition, this, old_map));
+		return this;
   }
 
   FixedArrayBase* elms = FixedArrayBase::cast(elements());

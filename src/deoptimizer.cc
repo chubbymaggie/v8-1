@@ -821,30 +821,30 @@ void Deoptimizer::DoComputeOutputFrames() {
 
   // We log deoptimization events before going on
   if ( FLAG_trace_internals &&
-		function_->IsJSFunction() ) {
-	  // function_ may be a SMI, which indicates a builtin function
-	  SharedFunctionInfo* shared = function_->shared();
-	  Code* code = shared->code();
-	  HeapObject** deopt_roots = isolate()->get_opt_code_fail_pair();
-	  char buf[48];
-	  sprintf(buf, "%s@%d", MessageFor(bailout_type_), bailout_id_);
-
-	  // We supplement the decription of the recorded target
-	  /*HeapObject* obj = HeapObject::cast(deopt_roots[0]);
-	  Map* exp_map = Map::cast(deopt_roots[1]);*/
-
-	  LOG(isolate(),
-		  EmitFunctionEvent(
-		  Logger::RegularDeopt,
-			function_,
-			code,
-			shared, 
-			compiled_code_, 
-			deopt_roots[0], deopt_roots[1], 
-			buf )
-		);
-
-	  deopt_roots[0] = deopt_roots[1] = NULL;
+       function_->IsJSFunction() ) {
+    // function_ may be a SMI, which indicates a builtin function
+    SharedFunctionInfo* shared = function_->shared();
+    Code* code = shared->code();
+    HeapObject** deopt_roots = isolate()->get_opt_code_fail_pair();
+    char buf[48];
+    sprintf(buf, "%s@%d", MessageFor(bailout_type_), bailout_id_);
+    
+    // We supplement the decription of the recorded target
+    /*HeapObject* obj = HeapObject::cast(deopt_roots[0]);
+      Map* exp_map = Map::cast(deopt_roots[1]);*/
+    
+    LOG(isolate(),
+	EmitFunctionEvent(
+			  Logger::RegularDeopt,
+			  function_,
+			  code,
+			  shared, 
+			  compiled_code_, 
+			  deopt_roots[0], deopt_roots[1], 
+			  buf )
+	);
+    
+    //deopt_roots[0] = deopt_roots[1] = NULL;
   }
 }
 

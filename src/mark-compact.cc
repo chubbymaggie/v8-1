@@ -2651,11 +2651,11 @@ void MarkCompactCollector::MigrateObject(Address dst,
   HEAP_PROFILE(heap(), ObjectMoveEvent(src, dst));
 
   if ( FLAG_trace_internals ) {
-	Object* value = Memory::Object_at(src);
-	if (value != NULL && value->IsHeapObject()) {
-	  LOG(heap()->isolate(), 
-		EmitGCMoveEvent(HeapObject::FromAddress(src), HeapObject::FromAddress(dst)));
-	}
+    Object* value = Memory::Object_at(src);
+    if (value != NULL && value->IsHeapObject()) {
+      LOG(heap()->isolate(), 
+	  EmitGCMoveEvent(HeapObject::FromAddress(src), HeapObject::FromAddress(dst)));
+    }
   }
 
   if (dest == OLD_POINTER_SPACE || dest == LO_SPACE) {

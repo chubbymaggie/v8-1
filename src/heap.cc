@@ -2003,8 +2003,8 @@ class ScavengingVisitor : public StaticVisitorBase {
     // Set the forwarding address.
     source->set_map_word(MapWord::FromForwardingAddress(target));
 	
-	// It's dangerous to retrive the map of source object
-	LOG_INTERNAL_EVENT(heap->isolate(), EmitGCMoveEvent(source, target));
+    // It's dangerous to retrive the map of source object
+    LOG_INTERNAL_EVENT(heap->isolate(), EmitGCMoveEvent(source, target));
 
     if (logging_and_profiling_mode == LOGGING_AND_PROFILING_ENABLED) {
       // Update NewSpace stats if necessary.

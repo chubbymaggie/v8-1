@@ -1209,7 +1209,7 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
 
   environment()->Push(new_elements);
 
-  if ( FLAG_trace_internals ) {
+  /*if ( FLAG_trace_internals ) {
   	Add<HPushArgument>(Add<HConstant>(Logger::CowCopy));
   	Add<HPushArgument>(object);
   	Add<HPushArgument>(graph()->GetConstantNull());
@@ -1218,7 +1218,7 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
   	  isolate()->factory()->empty_string(),
       Runtime::FunctionForId(Runtime::kLogObjectManipulate),
       3);
-  }
+  }*/
 
   cow_checker.Else();
 
@@ -5428,8 +5428,6 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
 
   // We log the array created at this literal
   int literal_index = expr->literal_index();
-
-  // Push the runtime call
   if (FLAG_trace_internals) {
 	Add<HPushArgument>(literal);
 	Add<HPushArgument>(Add<HConstant>(closure));
@@ -5440,7 +5438,7 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
 			  Runtime::FunctionForId(Runtime::kLogObjectCreate),
 			  3);
   }
-
+  
   expr->CalculateEmitStore(zone());
 
   for (int i = 0; i < expr->properties()->length(); i++) {
