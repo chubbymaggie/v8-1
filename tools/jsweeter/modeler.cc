@@ -11,6 +11,7 @@
 
 using namespace std;
 
+#define ON_STACK_NAME_SIZE 512
 
 // Events types
 enum InternalEvent {
@@ -121,7 +122,7 @@ create_boilerplate_common(FILE* file, const char* msg)
 
   // If this is a new machine
   if ( !sm->has_name() ) {
-    char buf[256];
+    char buf[ON_STACK_NAME_SIZE];
     sprintf( buf, "%s->%d", i_desc->sm->m_name.c_str(), index ); 
     sm->set_name(buf);
     // We use instance id as allocation signature
@@ -151,7 +152,7 @@ create_obj_common(FILE* file, StateMachine::Mtype type, const char* msg)
   int o_addr;
   int alloc_sig;
   int map_id, code;
-  char name_buf[256];
+  char name_buf[ON_STACK_NAME_SIZE];
 
   fscanf( file, "%x %x %x %x",
 	  &def_function, &o_addr, 
@@ -373,7 +374,7 @@ field_update_common(FILE* file, char* msg)
 static void
 new_field(FILE* file)
 {
-  char msg[256];
+  char msg[ON_STACK_NAME_SIZE];
   sprintf( msg, "+Fld: ");
   field_update_common(file, msg);
 }
@@ -382,7 +383,7 @@ new_field(FILE* file)
 static void
 del_field(FILE* file)
 {
-  char msg[256];
+  char msg[ON_STACK_NAME_SIZE];
   sprintf( msg, "-Fld: ");
   field_update_common(file, msg);
 }
@@ -391,7 +392,7 @@ del_field(FILE* file)
 static void
 write_field_transition(FILE* file)
 {
-  char msg[256];
+  char msg[ON_STACK_NAME_SIZE];
   sprintf( msg, "!Fld: ");
   field_update_common(file, msg);
 }
@@ -539,7 +540,7 @@ static void
 gen_opt_code(FILE* file)
 {
   int f_addr, code;
-  char opt_buf[256];
+  char opt_buf[ON_STACK_NAME_SIZE];
   
   sprintf( opt_buf, "Opt: " );
   fscanf( file, "%x %x %[^\t\n]", 
@@ -557,7 +558,7 @@ static void
 gen_osr_code(FILE* file)
 {
   int f_addr, code;
-  char opt_buf[256];
+  char opt_buf[ON_STACK_NAME_SIZE];
 
   sprintf( opt_buf, "Osr: " );
   fscanf( file, "%x %x %[^\t\n]",
@@ -583,7 +584,7 @@ static void
 disable_opt(FILE* file)
 {
   int shared, f_addr;
-  char opt_buf[256];
+  char opt_buf[ON_STACK_NAME_SIZE];
 
   fscanf( file, "%x %x %[^\t\n]",
           &f_addr, &shared, opt_buf );
@@ -599,7 +600,7 @@ static void
 reenable_opt(FILE* file)
 {
   int shared, f_addr;
-  char opt_buf[256];
+  char opt_buf[ON_STACK_NAME_SIZE];
 
   fscanf( file, "%x %x %[^\t\n]",
           &f_addr, &shared, opt_buf );
@@ -615,7 +616,7 @@ static void
 gen_opt_failed(FILE* file)
 {
   int f_addr, new_code;
-  char opt_buf[256];
+  char opt_buf[ON_STACK_NAME_SIZE];
 
   sprintf( opt_buf, "OptFailed: " );
   int last_pos = strlen(opt_buf);
@@ -654,7 +655,7 @@ do_deopt_common(int f_addr, int old_code, int new_code, const char* msg)
   }
   
   // Then, we transfer to the new_code
-  char full_buf[256];
+  char full_buf[ON_STACK_NAME_SIZE];
   sprintf( full_buf, "Deopt: %s", msg );
   return fsm->evolve(i_func, -1, new_code, full_buf);
 }
@@ -665,7 +666,7 @@ regular_deopt(FILE* file)
 {
   int f_addr, old_code, new_code;
   int failed_obj, exp_map_id, bailout_id;
-  char deopt_buf[256];
+  char deopt_buf[ON_STACK_NAME_SIZE];
 
   fscanf( file, "%x %x %x %x %x %[^\t\n]",
 	  &f_addr,
@@ -978,9 +979,6 @@ visualize_machines(const char* file_name)
 	  it != t_mac.end();
 	  ++it ) {
       StateMachine* sm = it->second;
-      //     if ( sm->id == 10256 )
-      //	printf( "Yes, here I am.\n" );
-      //printf( "%s, ", sm->toString(true).c_str() );
     
       if ( i == StateMachine::MObject &&
 	   ((ObjectMachine*)sm)->cause_deopt == false ) {
